@@ -6,58 +6,72 @@ from PIL import Image
 import imagehash as ihash
 import pickle
 import os.path
+from multiprocessing import Pool
 
-def hash_directory(dir_, cache):
+def create_hash(index_and_file_name):
+    index, file_name = index_and_file_name
+    image = Image.open(file_name)
+    hash_ = str(ihash.phash(image))
+    print(index)
 
-    if os.path.isfile(cache):
-        with open(cache, 'rb') as f:
-            hashes = pickle.load(f)
-    else:
-        hashes = {}
+    return (file_name, hash_)
 
-    try:
-        files = glob(dir_ + '/*.jpg') + glob(dir_ + '/*.JPG') + glob(dir_ + '/*.png') + glob(dir_ + '/*.PNG')
-        total_files = len(files)
+def hash_directory(dir_):
+    files = glob(dir_ + '/*.jpg') + glob(dir_ + '/*.JPG') + glob(dir_ + '/*.png') + glob(dir_ + '/*.PNG')
 
-        for i, file_name in enumerate(files):
-            if file_name in hashes:
-                continue
+    with Pool(8) as p:
+        hashes = p.map(create_hash, enumerate(files))
 
-            image = Image.open(file_name)
-            hash_ = str(ihash.phash(image))
-            hashes[file_name] = hash_
-
-            print("{}/{}".format(i, total_files))
-
-    except KeyboardInterrupt:
-        pass
-    finally:
-        print("Saving...")
-        with open(cache, 'wb') as f:
-            pickle.dump(hashes, f)
-
-    return hashes
+    return dict(hashes)
 
 
-def find_dups(data):
+def find_dups(*datas):
     hashes = {}
-    for image_name, hash_ in data.items():
-        hashes[hash_] = hashes.get(hash_, []) + [image_name]
+    for data in datas:
+        for image_name, hash_ in data.items():
+            hashes[hash_] = hashes.get(hash_, []) + [image_name]
 
-    duplicates = []
-    for hash_, image_names in hashes.items():
-        if len(image_names) > 1:
-            duplicates.append(image_names)
+        duplicates = []
+        for hash_, image_names in hashes.items():
+            if len(image_names) > 1:
+                duplicates.append(image_names)
 
     return duplicates
 
+####### SAVE HASHES
+# ios_hashes = hash_directory('/Volumes/Pictures/Original/iOS Pictures')
+# with open('ios_pictures.pickle', 'wb') as f:
+#     pickle.dump(ios_hashes, f)
 
-ios_hashes = hash_directory('/Volumes/Pictures/Original/iOS Pictures', 'ios_pictures.pickle')
-bridget_hashes = hash_directory('/Volumes/Pictures/Original/bridgets-iphone-backup-pictures', 'bridget_pictures.pickle')
-# dups = find_dups(ios_hashes)
+# print("Done hashing iOS pictures\n")
 
-# pprint(dups)
+# bridget_hashes = hash_directory('/Volumes/Pictures/Original/bridgets-iphone-backup-pictures')
+# with open('bridget_pictures.pickle', 'wb') as f:
+#     pickle.dump(bridget_hashes, f)
 
+# print("Done hashing Bridget's iOS  pictures")
+
+
+####### LOAD HASHES
+def load_hash(name):
+    with open(name, 'rb') as f:
+        return pickle.load(f)
+
+ios_hashes = load_hash('ios_pictures.pickle')
+bridget_hashes = load_hash('bridget_pictures.pickle')
+
+dups = find_dups(ios_hashes)
+pprint(len(dups))
+pprint(sum([len(x) for x in dups]))
+
+dups = find_dups(bridget_hashes)
+pprint(len(dups))
+pprint(sum([len(x) for x in dups]))
+
+dups = find_dups(ios_hashes, bridget_hashes)
+pprint(len(dups))
+pprint(sum([len(x) for x in dups]))
+pprint(dups)
 
 # for hash_, img_list in hashes.items():
 #     if len(img_list) > 1:
