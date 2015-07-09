@@ -1,16 +1,22 @@
 <html>
 <head>
-    <link rel="stylesheet" href="css/bootstrap.min.css" type="text/css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap-theme.min.css">
+    <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 </head>
 
 {% macro image(file_name, size) -%}
 <div class="col-xs-{{ size }}">
-    <img class="img-responsive img-thumbnail" src="{{ file_name }}">
-    <div class="metadata">
-        <div class="name">{{ file_name }}</div>
-        <div class="file-size">???</div>
-        <div class="resolution">???</div>
-        <div class="capture-time">???</div>
+    <div class="thumbnail">
+        <img class="img-responsive" src="{{ file_name }}" alt="{{ file_name }}">
+        <div class="caption">
+            <h5 class="name">{{ file_name }}</h5>
+            <div class="file-size">???</div>
+            <div class="resolution">???</div>
+            <div class="capture-time">???</div>
+            <a href="#" class="btn btn-danger delete-btn" role="button" data-name="{{ file_name }}">Delete</a>
+        </div>
     </div>
 </div>
 {%- endmacro %}
@@ -38,6 +44,27 @@
         {% endfor %}
 
     </div>
+
+    <script type="text/javascript">
+        console.log("Starting!");
+        $(".delete-btn").click(function() {
+            var file_name = $(this).data("name")
+            $.ajax({
+                url: '/picture' + file_name,
+                // url: '/picture/%2FVolumes',
+                type: 'DELETE',
+                success: function(data) {
+                    console.log("Yay, it worked!");
+                    console.log(data);
+                },
+                error: function() {
+                    console.log("Something went wrong...");
+                }
+            });
+        });
+
+    </script>
+
 </body>
 
 </html>
