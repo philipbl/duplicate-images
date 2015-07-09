@@ -1,0 +1,43 @@
+<html>
+<head>
+    <link rel="stylesheet" href="css/bootstrap.min.css" type="text/css">
+</head>
+
+{% macro image(file_name, size) -%}
+<div class="col-xs-{{ size }}">
+    <img class="img-responsive img-thumbnail" src="{{ file_name }}">
+    <div class="metadata">
+        <div class="name">{{ file_name }}</div>
+        <div class="file-size">???</div>
+        <div class="resolution">???</div>
+        <div class="capture-time">???</div>
+    </div>
+</div>
+{%- endmacro %}
+
+<body>
+    <div class="container">
+        {% for dup in duplicates %}
+        <div class="row" style="margin-bottom: 30px;">
+            {% if dup | count == 2 %}
+                {{ image(dup[0], 6) }}
+                {{ image(dup[1], 6) }}
+            {% elif dup | count == 3 %}
+                {{ image(dup[0], 4) }}
+                {{ image(dup[1], 4) }}
+                {{ image(dup[2], 4) }}
+            {% elif dup | count == 4 %}
+                {{ image(dup[0], 3) }}
+                {{ image(dup[1], 3) }}
+                {{ image(dup[2], 3) }}
+                {{ image(dup[3], 3) }}
+            {% else %}
+                {{ dup }}
+            {% endif %}
+        </div>
+        {% endfor %}
+
+    </div>
+</body>
+
+</html>
