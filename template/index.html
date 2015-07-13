@@ -12,10 +12,12 @@
         <img class="img-responsive" src="{{ file_name }}" alt="{{ file_name }}">
         <div class="caption">
             <h5 class="name">{{ file_name }}</h5>
-            <div class="file-size">???</div>
-            <div class="resolution">???</div>
-            <div class="capture-time">???</div>
-            <a href="#" class="btn btn-danger delete-btn" role="button" data-name="{{ file_name }}">Delete</a>
+            <div class="file-size">{{ file_name | file_size | filesizeformat }}</div>
+            <div class="resolution">{{ file_name | image_size }}</div>
+            <div class="capture-time">{{ file_name | capture_time }}</div>
+            <button class="btn btn-danger delete-btn" role="button" data-name="{{ file_name }}" style="margin-top: 15px">
+                Delete
+            </button>
         </div>
     </div>
 </div>
@@ -24,7 +26,7 @@
 <body>
     <div class="container">
         {% for dup in duplicates %}
-        <div class="row" style="margin-bottom: 30px;">
+        <div class="row" style="margin: 15px; margin-bottom: 30px;">
             {% if dup | count == 2 %}
                 {{ image(dup[0], 6) }}
                 {{ image(dup[1], 6) }}
@@ -45,17 +47,33 @@
 
     </div>
 
+    <div class="alert alert-danger alert-dismissible fade" role="alert" id="file-not-found-alert" style="position: fixed; top: 0; left: 0; width: 100%;">
+        <button type="button" class="close" data-hide="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+        <strong>Error!</strong> File could not be found.
+    </div>
+
     <script type="text/javascript">
-        console.log("Starting!");
+        $(function(){
+            $("[data-hide]").on("click", function(){
+                $(this).closest("." + $(this).attr("data-hide")).removeClass("in");
+            });
+        });
+
         $(".delete-btn").click(function() {
-            var file_name = $(this).data("name")
+            var file_name = $(this).data("name");
+            var parent = $(this).parent().parent();
+
             $.ajax({
-                url: '/picture' + file_name,
+                url: 'http://127.0.0.1:5000/picture' + file_name,
                 // url: '/picture/%2FVolumes',
                 type: 'DELETE',
                 success: function(data) {
-                    console.log("Yay, it worked!");
-                    console.log(data);
+                    if(data == "True") {
+                        parent.addClass('fade');
+                    }
+                    else {
+                        $('#file-not-found-alert').addClass('in');
+                    }
                 },
                 error: function() {
                     console.log("Something went wrong...");
