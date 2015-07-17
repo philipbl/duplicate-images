@@ -7,7 +7,7 @@ Usage:
     duplicate_finder.py remove <path> [--database=<db_file>]
     duplicate_finder.py clear [--database=<db_file>]
     duplicate_finder.py show [--database=<db_file>]
-    duplicate_finder.py find [--print] [--database=<db_file>]
+    duplicate_finder.py find [--print] [--trash] [--database=<db_file>]
     duplicate_finder.py -h | –-help
 
 Options:
@@ -16,12 +16,16 @@ Options:
     --errors        Display an error if an image file has already been hashed,
                     but continuing calculating hashes for other images
     --print         Only print duplicate files
+    --trash         Where files will be put when they are deleted (default: ./Trash)
     -–database=<db> Set database file [default: ./dups.db]
 """
 
 
 import imagehash
 import pymongo
+import webbrowser
+import os
+import shutil
 from PIL import Image
 from termcolor import colored, cprint
 from contextlib import contextmanager
@@ -31,7 +35,13 @@ from enum import Enum
 from multiprocessing import Pool, Value
 from functools import partial
 from pprint import pprint
+from tempfile import NamedTemporaryFile
+from jinja2 import Template, FileSystemLoader, Environment
+from flask import Flask, send_from_directory
+from PIL import Image, ExifTags
+import shutil
 
+TRASH = "./Trash/"
 
 class DuplicateType(Enum):
     ignore = 1
@@ -60,10 +70,12 @@ def get_image_files(path):
             glob(path + '/*.JPG') + \
             glob(path + '/*.png') + \
             glob(path + '/*.PNG')
+
     return files
 
 def hash_file(file, cb):
     cb(file, str(imagehash.phash(Image.open(file))))
+    cprint("\tHashed {}".format(file), "blue")
 
 def hash_files_single(files, cb):
     for file in files:
@@ -92,13 +104,15 @@ def add(path, db):
 
     cprint("...done", "blue")
 
-
 def remove(path, db):
     files = get_image_files(path)
 
     # TODO: Can I do a bulk delete?
     for file in files:
         db.delete_one({'_id': file})
+
+def remove_image(file, db):
+    db.delete_one({'_id': file})
 
 def clear(db):
     db.remove({})
@@ -107,7 +121,7 @@ def show(db):
     pprint(list(db.find()))
 
 def find(db, print_):
-    result = db.aggregate([
+    dups = db.aggregate([
         {"$group":
             {
                 "_id": "$hash",
@@ -122,14 +136,78 @@ def find(db, print_):
         }])
 
     if print_:
-        pprint(list(result))
+        pprint(list(dups))
     else:
-        pass
+        display_duplicates(list(dups), partial(remove_image, db=db))
+
+def display_duplicates(duplicates, delete_cb):
+    with NamedTemporaryFile(mode='w', suffix='.html') as f:
+        f.write(render(duplicates))
+        webbrowser.open("file://{}".format(f.name))
+
+        app = Flask(__name__)
+        @app.route('/picture/<path:file_name>', methods=['DELETE'])
+        def delete_picture(file_name):
+            print("Moving file")
+            file_name = "/" + file_name
+
+            try:
+                print(file_name)
+                print(TRASH + os.path.basename(file_name))
+                shutil.move(file_name, TRASH + os.path.basename(file_name))
+                delete_cb(file_name)
+            except FileNotFoundError:
+                return "False"
+
+            return "True"
+
+        app.run()
+
+
+def render(duplicates):
+    def get_file_size(file_name):
+        try:
+            return os.path.getsize(file_name)
+        except FileNotFoundError:
+            return 0
+
+    def get_image_size(file_name):
+        try:
+            im = Image.open(file_name)
+            return "{} x {}".format(*im.size)
+        except FileNotFoundError:
+            return "Size unknown"
+
+    def get_capture_time(file_name):
+        try:
+            img = Image.open(file_name)
+            exif = {
+                ExifTags.TAGS[k]: v
+                for k, v in img._getexif().items()
+                if k in ExifTags.TAGS
+            }
+            return exif["DateTimeOriginal"]
+        except:
+            return "Time unknown"
+
+    env = Environment(loader=FileSystemLoader('template'))
+
+    # Add my own filters
+    env.filters['file_size'] = get_file_size
+    env.filters['image_size'] = get_image_size
+    env.filters['capture_time'] = get_capture_time
+
+    template = env.get_template('index.html')
+
+    return template.render(duplicates=duplicates)
 
 if __name__ == '__main__':
     from docopt import docopt
     args = docopt(__doc__)
     database = args['--database']
+
+    if args['--trash']:
+        TRASH = args['--trash']
 
     if database is None:
         database = DEFAULT_DATABASE
