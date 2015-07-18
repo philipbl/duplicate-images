@@ -7,18 +7,18 @@ Usage:
     duplicate_finder.py remove <path> [--database=<db_file>]
     duplicate_finder.py clear [--database=<db_file>]
     duplicate_finder.py show [--database=<db_file>]
-    duplicate_finder.py find [--print] [--trash] [--database=<db_file>]
+    duplicate_finder.py find [--print] [--trash=<trash_path>] [--database=<db_file>]
     duplicate_finder.py -h | –-help
 
 Options:
-    -h, -–help      Show this screen
-    --skip          Check if a hash already exists for file and if so don't regenerate
-                    hash (default)
-    --error         Display an error if an image file has already been hashed,
-                    but continuing calculating hashes for other images
-    --print         Only print duplicate files
-    --trash         Where files will be put when they are deleted (default: ./Trash)
-    -–database=<db> Set database file [default: ./dups.db]
+    -h, -–help            Show this screen
+    --skip                Check if a hash already exists for file and if so don't regenerate
+                          hash (default)
+    --error               Display an error if an image file has already been hashed,
+                          but continuing calculating hashes for other images
+    --print               Only print duplicate files
+    --trash=<trash_path>  Where files will be put when they are deleted (default: ./Trash)
+    -–database=<db>       Set database file [default: ./dups.db]
 """
 
 
