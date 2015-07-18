@@ -50,6 +50,7 @@ DEFAULT_DATABASE = "hashes.db"
 @contextmanager
 def connect_to_db():
     p = Popen(['mongod', '--config', 'mongod.conf'])
+    cprint("Started database...", "yellow")
     client = MongoClient()
     db = client.image_database
     images = db.images
@@ -57,6 +58,7 @@ def connect_to_db():
     yield images
 
     client.close()
+    cprint("Stopped database...", "yellow")
     p.kill()
 
 def get_image_files(path):
@@ -124,7 +126,9 @@ def clear(db):
     db.remove({})
 
 def show(db):
+    total = db.count()
     pprint(list(db.find()))
+    print("Total: {}".format(total))
 
 def find(db, print_):
     dups = db.aggregate([
