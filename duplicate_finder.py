@@ -3,8 +3,8 @@
 Uses phash to find duplicate pictures.
 
 Usage:
-    duplicate_finder.py add <path> [--database=<db_file>]
-    duplicate_finder.py remove <path> [--database=<db_file>]
+    duplicate_finder.py add <path> ... [--database=<db_file>]
+    duplicate_finder.py remove <path> ... [--database=<db_file>]
     duplicate_finder.py clear [--database=<db_file>]
     duplicate_finder.py show [--database=<db_file>]
     duplicate_finder.py find [--print] [--trash=<trash_path>] [--database=<db_file>]
@@ -104,20 +104,22 @@ def _add_to_database(file, hash):
 def _in_database(file):
     return db.count({"_id": file}) > 0
 
-def add(path, db):
-    cprint("Hashing {}".format(path), "blue")
-    files = get_image_files(path)
+def add(paths, db):
+    for path in paths:
+        cprint("Hashing {}".format(path), "blue")
+        files = get_image_files(path)
 
-    hash_files_parallel(files, _in_database, _add_to_database)
+        hash_files_parallel(files, _in_database, _add_to_database)
 
-    cprint("...done", "blue")
+        cprint("...done", "blue")
 
-def remove(path, db):
-    files = get_image_files(path)
+def remove(paths, db):
+    for path in paths:
+        files = get_image_files(path)
 
-    # TODO: Can I do a bulk delete?
-    for file in files:
-        db.delete_one({'_id': file})
+        # TODO: Can I do a bulk delete?
+        for file in files:
+            db.delete_one({'_id': file})
 
 def remove_image(file, db):
     db.delete_one({'_id': file})
