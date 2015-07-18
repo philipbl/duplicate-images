@@ -78,9 +78,13 @@ def hash_file(file, contains_cb, result_cb):
     if contains_cb(file):
         cprint("\tSkipping {}".format(file), "green")
     else:
-        hash_ = str(imagehash.phash(Image.open(file)))
-        result_cb(file, hash_)
-        cprint("\tHashed {}".format(file), "blue")
+        try:
+            hash_ = str(imagehash.phash(Image.open(file)))
+            result_cb(file, hash_)
+            cprint("\tHashed {}".format(file), "blue")
+        except OSError:
+            cprint("Unable to open {}".format(file), "red")
+
 
 def hash_files_parallel(files, contains_cb, result_cb):
     with Pool(8) as p:
