@@ -81,8 +81,27 @@ def hash_file(file, contains_cb, result_cb):
         cprint("\tSkipping {}".format(file), "green")
     else:
         try:
-            hash_ = str(imagehash.phash(Image.open(file)))
-            result_cb(file, hash_)
+            hashes = []
+
+            # 0 degree hash
+            img = Image.open(file)
+            hashes.append(str(imagehash.phash(img)))
+
+            # 90 degree hash
+            img = img.rotate(90)
+            hashes.append(str(imagehash.phash(img)))
+
+            # 180 degree hash
+            img = img.rotate(180)
+            hashes.append(str(imagehash.phash(img)))
+
+            # 270 degree hash
+            img = img.rotate(270)
+            hashes.append(str(imagehash.phash(img)))
+
+            hashes = ''.join(sorted(hashes))
+            result_cb(file, hashes)
+
             cprint("\tHashed {}".format(file), "blue")
         except OSError:
             cprint("Unable to open {}".format(file), "red")
