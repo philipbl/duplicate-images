@@ -4,6 +4,7 @@ ImageHash==1.0
 itsdangerous==0.24
 Jinja2==2.7.3
 MarkupSafe==0.23
+more-itertools==2.2
 numpy==1.9.2
 Pillow==2.9.0
 pymongo==3.0.3

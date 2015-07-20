@@ -23,6 +23,27 @@
 </div>
 {%- endmacro %}
 
+{% macro pagination(current, total) -%}
+<nav>
+    <div class="pages text-center">
+        {{ current + 1 }} of {{ total }}
+    </div>
+    <ul class="pager">
+        {% if current == 0 %}
+        <li class="disabled"><span>Previous</span></li>
+        {% else %}
+        <li><a href="{{ current - 1}}.html">Previous</a></li>
+        {% endif %}
+
+        {% if current == (total - 1) %}
+        <li class="disabled"><span>Next</span></li>
+        {% else %}
+        <li><a href="{{ current + 1 }}.html">Next</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{%- endmacro %}
+
 <body>
     <div class="container">
         {% for dup in duplicates %}
@@ -45,6 +66,8 @@
             {% endif %}
         </div>
         {% endfor %}
+
+        {{ pagination(current, total) }}
     </div>
 
     <div class="alert alert-danger alert-dismissible fade" role="alert" id="file-not-found-alert" style="position: fixed; top: 0; left: 0; width: 100%;">

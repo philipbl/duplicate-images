@@ -24,6 +24,7 @@ import pymongo
 import webbrowser
 import os
 import shutil
+from more_itertools import *
 from PIL import Image
 from termcolor import colored, cprint
 from contextlib import contextmanager
@@ -32,7 +33,7 @@ from glob import glob
 from multiprocessing import Pool, Value
 from functools import partial
 from pprint import pprint
-from tempfile import NamedTemporaryFile
+from tempfile import TemporaryDirectory
 from jinja2 import Template, FileSystemLoader, Environment
 from flask import Flask, send_from_directory
 from PIL import Image, ExifTags
@@ -176,9 +177,14 @@ def find(db, print_):
         display_duplicates(list(dups), partial(remove_image, db=db))
 
 def display_duplicates(duplicates, delete_cb):
-    with NamedTemporaryFile(mode='w', suffix='.html') as f:
-        f.write(render(duplicates))
-        webbrowser.open("file://{}".format(f.name))
+    with TemporaryDirectory() as folder:
+        # Generate all of the HTML files
+        chunk_size = 25
+        for i, dups in enumerate(chunked(duplicates, chunk_size)):
+            with open('{}/{}.html'.format(folder, i), 'w') as f:
+                f.write(render(dups, current=i, total=int(len(duplicates) / chunk_size)))
+
+        webbrowser.open("file://{}/{}".format(folder, '0.html'))
 
         app = Flask(__name__)
         @app.route('/picture/<path:file_name>', methods=['DELETE'])
@@ -199,7 +205,7 @@ def display_duplicates(duplicates, delete_cb):
         app.run()
 
 
-def render(duplicates):
+def render(duplicates, current, total):
     def get_file_size(file_name):
         try:
             return os.path.getsize(file_name)
@@ -234,7 +240,7 @@ def render(duplicates):
 
     template = env.get_template('index.html')
 
-    return template.render(duplicates=duplicates)
+    return template.render(duplicates=duplicates, current=current, total=total)
 
 if __name__ == '__main__':
     from docopt import docopt
