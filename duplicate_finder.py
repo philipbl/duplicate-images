@@ -3,11 +3,11 @@
 Uses phash to find duplicate pictures.
 
 Usage:
-    duplicate_finder.py add <path> ... [--database=<db_file>]
-    duplicate_finder.py remove <path> ... [--database=<db_file>]
-    duplicate_finder.py clear [--database=<db_file>]
-    duplicate_finder.py show [--database=<db_file>]
-    duplicate_finder.py find [--print] [--trash=<trash_path>] [--database=<db_file>]
+    duplicate_finder.py add <path> ...
+    duplicate_finder.py remove <path> ...
+    duplicate_finder.py clear
+    duplicate_finder.py show
+    duplicate_finder.py find [--print] [--trash=<trash_path>]
     duplicate_finder.py -h | –-help
 
 Options:
@@ -18,7 +18,6 @@ Options:
                           but continuing calculating hashes for other images
     --print               Only print duplicate files
     --trash=<trash_path>  Where files will be put when they are deleted (default: ./Trash)
-    -–database=<db>       Set database file [default: ./dups.db]
 """
 
 
@@ -40,12 +39,9 @@ from jinja2 import Template, FileSystemLoader, Environment
 from flask import Flask, send_from_directory
 from PIL import Image, ExifTags
 from subprocess import Popen
-import shutil
 
 TRASH = "./Trash/"
 
-
-DEFAULT_DATABASE = "hashes.db"
 
 @contextmanager
 def connect_to_db():
@@ -61,6 +57,7 @@ def connect_to_db():
     cprint("Stopped database...", "yellow")
     p.kill()
 
+
 def get_image_files(path):
     def is_image(file_name):
         file_name = file_name.lower()
@@ -75,6 +72,7 @@ def get_image_files(path):
         for file in files:
             if is_image(file):
                 yield os.path.join(root, file)
+
 
 def hash_file(file, contains_cb, result_cb):
     if contains_cb(file):
@@ -243,13 +241,9 @@ def render(duplicates):
 if __name__ == '__main__':
     from docopt import docopt
     args = docopt(__doc__)
-    database = args['--database']
 
     if args['--trash']:
         TRASH = args['--trash']
-
-    if database is None:
-        database = DEFAULT_DATABASE
 
     with connect_to_db() as db:
         if args['add']:
