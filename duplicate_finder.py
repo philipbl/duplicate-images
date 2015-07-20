@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Uses phash to find duplicate pictures.
+A tool to find and remove duplicate pictures.
 
 Usage:
     duplicate_finder.py add <path> ...
@@ -12,12 +12,10 @@ Usage:
 
 Options:
     -h, -–help            Show this screen
-    --skip                Check if a hash already exists for file and if so don't regenerate
-                          hash (default)
-    --error               Display an error if an image file has already been hashed,
-                          but continuing calculating hashes for other images
-    --print               Only print duplicate files
-    --trash=<trash_path>  Where files will be put when they are deleted (default: ./Trash)
+
+    find:
+        --print               Only print duplicate files rather than displaying HTML file
+        --trash=<trash_path>  Where files will be put when they are deleted (default: ./Trash)
 """
 
 
