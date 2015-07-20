@@ -79,9 +79,13 @@ def hash_file(file, contains_cb, result_cb):
     else:
         try:
             hashes = []
+            img = Image.open(file)
+
+            file_size = get_file_size(file)
+            image_size = get_image_size(img)
+            capture_time = get_capture_time(img)
 
             # 0 degree hash
-            img = Image.open(file)
             hashes.append(str(imagehash.phash(img)))
 
             # 90 degree hash
@@ -97,7 +101,7 @@ def hash_file(file, contains_cb, result_cb):
             hashes.append(str(imagehash.phash(img)))
 
             hashes = ''.join(sorted(hashes))
-            result_cb(file, hashes)
+            result_cb(file, hashes, file_size, image_size, capture_time)
 
             cprint("\tHashed {}".format(file), "blue")
         except OSError:
@@ -112,9 +116,13 @@ def hash_files_parallel(files, contains_cb, result_cb):
         p.map(func, files)
 
 
-def _add_to_database(file, hash):
+def _add_to_database(file_, hash_, file_size, image_size, capture_time):
     try:
-        db.insert_one({"_id": file, "hash": hash})
+        db.insert_one({"_id": file_,
+                       "hash": hash_,
+                       "file_size": file_size,
+                       "image_size": image_size,
+                       "capture_time": capture_time})
     except pymongo.errors.DuplicateKeyError:
         cprint("Duplicate key: {}".format(file), "red")
 
@@ -162,7 +170,16 @@ def find(db, print_):
             {
                 "_id": "$hash",
                 "total": {"$sum": 1},
-                "file_names": {"$push": "$_id"}
+                "items":
+                    {
+                        "$push":
+                            {
+                                "file_name": "$_id",
+                                "file_size": "$file_size",
+                                "image_size": "$image_size",
+                                "capture_time": "$capture_time"
+                            }
+                    }
             }
         },
         {"$match":
@@ -204,40 +221,29 @@ def display_duplicates(duplicates, delete_cb):
 
         app.run()
 
+def get_file_size(file_name):
+    try:
+        return os.path.getsize(file_name)
+    except FileNotFoundError:
+        return 0
+
+def get_image_size(img):
+    return "{} x {}".format(*img.size)
+
+def get_capture_time(img):
+    try:
+        exif = {
+            ExifTags.TAGS[k]: v
+            for k, v in img._getexif().items()
+            if k in ExifTags.TAGS
+        }
+        return exif["DateTimeOriginal"]
+    except:
+        return "Time unknown"
 
 def render(duplicates, current, total):
-    def get_file_size(file_name):
-        try:
-            return os.path.getsize(file_name)
-        except FileNotFoundError:
-            return 0
-
-    def get_image_size(file_name):
-        try:
-            im = Image.open(file_name)
-            return "{} x {}".format(*im.size)
-        except FileNotFoundError:
-            return "Size unknown"
-
-    def get_capture_time(file_name):
-        try:
-            img = Image.open(file_name)
-            exif = {
-                ExifTags.TAGS[k]: v
-                for k, v in img._getexif().items()
-                if k in ExifTags.TAGS
-            }
-            return exif["DateTimeOriginal"]
-        except:
-            return "Time unknown"
 
     env = Environment(loader=FileSystemLoader('template'))
-
-    # Add my own filters
-    env.filters['file_size'] = get_file_size
-    env.filters['image_size'] = get_image_size
-    env.filters['capture_time'] = get_capture_time
-
     template = env.get_template('index.html')
 
     return template.render(duplicates=duplicates, current=current, total=total)
