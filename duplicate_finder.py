@@ -95,14 +95,17 @@ def hash_files_parallel(files, contains_cb, result_cb):
                        result_cb=result_cb)
         p.map(func, files)
 
+
 def _add_to_database(file, hash):
     try:
         db.insert_one({"_id": file, "hash": hash})
     except pymongo.errors.DuplicateKeyError:
         cprint("Duplicate key: {}".format(file), "red")
 
+
 def _in_database(file):
     return db.count({"_id": file}) > 0
+
 
 def add(paths, db):
     for path in paths:
@@ -113,6 +116,7 @@ def add(paths, db):
 
         cprint("...done", "blue")
 
+
 def remove(paths, db):
     for path in paths:
         files = get_image_files(path)
@@ -121,16 +125,20 @@ def remove(paths, db):
         for file in files:
             db.delete_one({'_id': file})
 
+
 def remove_image(file, db):
     db.delete_one({'_id': file})
 
+
 def clear(db):
     db.remove({})
+
 
 def show(db):
     total = db.count()
     pprint(list(db.find()))
     print("Total: {}".format(total))
+
 
 def find(db, print_):
     dups = db.aggregate([
