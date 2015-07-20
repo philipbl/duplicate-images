@@ -7,7 +7,7 @@ Usage:
     duplicate_finder.py remove <path> ...
     duplicate_finder.py clear
     duplicate_finder.py show
-    duplicate_finder.py find [--print] [--trash=<trash_path>]
+    duplicate_finder.py find [--print] [--match-time] [--trash=<trash_path>]
     duplicate_finder.py -h | –-help
 
 Options:
@@ -15,6 +15,8 @@ Options:
 
     find:
         --print               Only print duplicate files rather than displaying HTML file
+        --match-time          Adds the extra constraint that duplicate images must have the
+                              same capture times in order to be considered.
         --trash=<trash_path>  Where files will be put when they are deleted (default: ./Trash)
 """
 
@@ -164,7 +166,7 @@ def show(db):
     print("Total: {}".format(total))
 
 
-def find(db, print_):
+def find(db, print_, match_time):
     dups = db.aggregate([
         {"$group":
             {
@@ -188,10 +190,26 @@ def find(db, print_):
             }
         }])
 
+    dups = list(dups)
+
+    if match_time:
+        def same_time(dup):
+            items = dup['items']
+            if "Time unknown" in items:
+                # Since we can't know for sure, better safe than sorry
+                return True
+
+            if len(set([i['capture_time'] for i in items])) > 1:
+                return False
+
+            return True
+
+        dups = [d for d in dups if same_time(d)]
+
     if print_:
-        pprint(list(dups))
+        pprint(dups)
     else:
-        display_duplicates(list(dups), partial(remove_image, db=db))
+        display_duplicates(dups, partial(remove_image, db=db))
 
 def display_duplicates(duplicates, delete_cb):
     with TemporaryDirectory() as folder:
@@ -265,7 +283,7 @@ if __name__ == '__main__':
         elif args['show']:
             show(db)
         elif args['find']:
-            find(db, args['--print'])
+            find(db, args['--print'], args['--match-time'])
 
 
 
