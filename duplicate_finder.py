@@ -208,8 +208,10 @@ def find(db, print_, match_time):
 
     if print_:
         pprint(dups)
+        print("Number of duplicates: {}".format(len(dups)))
     else:
         display_duplicates(dups, partial(remove_image, db=db))
+
 
 def display_duplicates(duplicates, delete_cb):
     with TemporaryDirectory() as folder:

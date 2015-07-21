@@ -15,7 +15,7 @@
             <div class="file-size">{{ img['file_size'] | filesizeformat }}</div>
             <div class="resolution">{{ img['image_size'] }}</div>
             <div class="capture-time">{{ img['capture_time'] }}</div>
-            <button class="btn btn-danger delete-btn" role="button" data-name="{{ file_name }}" style="margin-top: 15px">
+            <button class="btn btn-danger delete-btn" role="button" data-name="{{ img['file_name'] }}" style="margin-top: 15px">
                 Delete
             </button>
         </div>
