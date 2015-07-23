@@ -6,16 +6,16 @@
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 </head>
 
-{% macro image(file_name, size) -%}
+{% macro image(img, size) -%}
 <div class="col-xs-{{ size }}">
     <div class="thumbnail">
-        <img class="img-responsive" src="{{ file_name }}" alt="{{ file_name }}">
+        <img class="img-responsive" src="{{ img['file_name'] }}" alt="{{ img['file_name'] }}">
         <div class="caption">
-            <h5 class="name">{{ file_name }}</h5>
-            <div class="file-size">{{ file_name | file_size | filesizeformat }}</div>
-            <div class="resolution">{{ file_name | image_size }}</div>
-            <div class="capture-time">{{ file_name | capture_time }}</div>
-            <button class="btn btn-danger delete-btn" role="button" data-name="{{ file_name }}" style="margin-top: 15px">
+            <h5 class="name">{{ img['file_name'] }}</h5>
+            <div class="file-size">{{ img['file_size'] | filesizeformat }}</div>
+            <div class="resolution">{{ img['image_size'] }}</div>
+            <div class="capture-time">{{ img['capture_time'] }}</div>
+            <button class="btn btn-danger delete-btn" role="button" data-name="{{ img['file_name'] }}" style="margin-top: 15px">
                 Delete
             </button>
         </div>
@@ -23,11 +23,32 @@
 </div>
 {%- endmacro %}
 
+{% macro pagination(current, total) -%}
+<nav>
+    <div class="pages text-center">
+        {{ current + 1 }} of {{ total }}
+    </div>
+    <ul class="pager">
+        {% if current == 0 %}
+        <li class="disabled"><span>Previous</span></li>
+        {% else %}
+        <li><a href="{{ current - 1}}.html">Previous</a></li>
+        {% endif %}
+
+        {% if current == (total - 1) %}
+        <li class="disabled"><span>Next</span></li>
+        {% else %}
+        <li><a href="{{ current + 1 }}.html">Next</a></li>
+        {% endif %}
+    </ul>
+</nav>
+{%- endmacro %}
+
 <body>
     <div class="container">
         {% for dup in duplicates %}
         <div class="row" style="margin: 15px; margin-bottom: 30px;">
-            {% set names = dup['file_names'] %}
+            {% set names = dup['items'] %}
             {% if names | count == 2 %}
                 {{ image(names[0], 6) }}
                 {{ image(names[1], 6) }}
@@ -45,6 +66,8 @@
             {% endif %}
         </div>
         {% endfor %}
+
+        {{ pagination(current, total) }}
     </div>
 
     <div class="alert alert-danger alert-dismissible fade" role="alert" id="file-not-found-alert" style="position: fixed; top: 0; left: 0; width: 100%;">
