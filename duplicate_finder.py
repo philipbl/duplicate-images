@@ -157,7 +157,7 @@ def remove_image(file, db):
 
 
 def clear(db):
-    db.remove({})
+    db.drop()
 
 
 def show(db):
