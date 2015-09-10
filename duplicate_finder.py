@@ -56,7 +56,7 @@ def connect_to_db():
 
     client.close()
     cprint("Stopped database...", "yellow")
-    p.kill()
+    p.terminate()
 
 
 def get_image_files(path):
