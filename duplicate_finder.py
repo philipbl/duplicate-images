@@ -3,15 +3,20 @@
 A tool to find and remove duplicate pictures.
 
 Usage:
-    duplicate_finder.py add <path> ...
-    duplicate_finder.py remove <path> ...
-    duplicate_finder.py clear
-    duplicate_finder.py show
-    duplicate_finder.py find [--print] [--match-time] [--trash=<trash_path>]
+    duplicate_finder.py add <path> ... [--db=<db_path>] [--parallel=<num_processes>]
+    duplicate_finder.py remove <path> ... [--db=<db_path>]
+    duplicate_finder.py clear [--db=<db_path>]
+    duplicate_finder.py show [--db=<db_path>]
+    duplicate_finder.py find [--print] [--match-time] [--trash=<trash_path>] [--db=<db_path>]
     duplicate_finder.py -h | –-help
 
 Options:
-    -h, -–help            Show this screen
+    -h, -–help                Show this screen
+
+    --db=<db_path>            The location of the database. (default: ./db)
+
+    --parallel=<num_processes> The number of parallel processes to run to hash the image
+                               files (default: 8).
 
     find:
         --print               Only print duplicate files rather than displaying HTML file
@@ -39,14 +44,16 @@ from tempfile import TemporaryDirectory
 from jinja2 import Template, FileSystemLoader, Environment
 from flask import Flask, send_from_directory
 from PIL import Image, ExifTags
-from subprocess import Popen
+from subprocess import Popen, PIPE
 
 TRASH = "./Trash/"
+DB_PATH = "./db"
+NUM_PROCESSES = 8
 
 
 @contextmanager
 def connect_to_db():
-    p = Popen(['mongod', '--config', 'mongod.conf'])
+    p = Popen(['mongod', '--dbpath', DB_PATH], stdout=PIPE, stderr=PIPE)
     cprint("Started database...", "yellow")
     client = MongoClient()
     db = client.image_database
@@ -56,7 +63,7 @@ def connect_to_db():
 
     client.close()
     cprint("Stopped database...", "yellow")
-    p.kill()
+    p.terminate()
 
 
 def get_image_files(path):
@@ -111,7 +118,7 @@ def hash_file(file, contains_cb, result_cb):
 
 
 def hash_files_parallel(files, contains_cb, result_cb):
-    with Pool(8) as p:
+    with Pool(NUM_PROCESSES) as p:
         func = partial(hash_file,
                        contains_cb=contains_cb,
                        result_cb=result_cb)
@@ -157,7 +164,7 @@ def remove_image(file, db):
 
 
 def clear(db):
-    db.remove({})
+    db.drop()
 
 
 def show(db):
@@ -274,6 +281,12 @@ if __name__ == '__main__':
 
     if args['--trash']:
         TRASH = args['--trash']
+
+    if args['--db']:
+        DB_PATH = args['--db']
+
+    if args['--parallel']:
+        NUM_PROCESSES = args['--parallel']
 
     with connect_to_db() as db:
         if args['add']:
