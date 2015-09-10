@@ -3,15 +3,17 @@
 A tool to find and remove duplicate pictures.
 
 Usage:
-    duplicate_finder.py add <path> ...
-    duplicate_finder.py remove <path> ...
-    duplicate_finder.py clear
-    duplicate_finder.py show
-    duplicate_finder.py find [--print] [--match-time] [--trash=<trash_path>]
+    duplicate_finder.py add <path> ... [--db=<db_path>]
+    duplicate_finder.py remove <path> ... [--db=<db_path>]
+    duplicate_finder.py clear [--db=<db_path>]
+    duplicate_finder.py show [--db=<db_path>]
+    duplicate_finder.py find [--print] [--match-time] [--trash=<trash_path>] [--db=<db_path>]
     duplicate_finder.py -h | –-help
 
 Options:
-    -h, -–help            Show this screen
+    -h, -–help                Show this screen
+
+    --db=<db_path>    The location of the database. (default: ./db)
 
     find:
         --print               Only print duplicate files rather than displaying HTML file
@@ -275,6 +277,9 @@ if __name__ == '__main__':
 
     if args['--trash']:
         TRASH = args['--trash']
+
+    if args['--db']:
+        DB_PATH = args['--db']
 
     with connect_to_db() as db:
         if args['add']:
