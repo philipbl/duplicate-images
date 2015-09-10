@@ -39,14 +39,15 @@ from tempfile import TemporaryDirectory
 from jinja2 import Template, FileSystemLoader, Environment
 from flask import Flask, send_from_directory
 from PIL import Image, ExifTags
-from subprocess import Popen
+from subprocess import Popen, PIPE
 
 TRASH = "./Trash/"
+DB_PATH = "./db"
 
 
 @contextmanager
 def connect_to_db():
-    p = Popen(['mongod', '--config', 'mongod.conf'])
+    p = Popen(['mongod', '--dbpath', DB_PATH], stdout=PIPE, stderr=PIPE)
     cprint("Started database...", "yellow")
     client = MongoClient()
     db = client.image_database
