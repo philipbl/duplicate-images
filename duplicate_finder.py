@@ -254,25 +254,28 @@ def dedup(db, match_time):
     if match_time:
         dups = [d for d in dups if same_time(d)]
 
-    count = 0
+    retrn_dups = []
     cb = partial(remove_image, db=db)
     for dup in dups:
-        count += len([do_delete_picture(x['file_name'], cb)
-                      for x in dup['items'][1:]])
+        retrn_dups += [do_delete_picture(x['file_name'], cb)
+                       for x in dup['items'][1:]]
 
-    print("deleted {}/{} files".format(count.count("True"), count))
+    print("deleted {}/{} files".format(retrn_dups.count("True"),
+                                       len(retrn_dups)))
 
 
 def do_delete_picture(file_name, delete_cb):
     print("Moving file")
     file_name = "/" + file_name
-
+    if not os.path.exists(TRASH):
+        raise Exception("path to trash missing: {}".format(TRASH))
     try:
         print(file_name)
         print(TRASH + os.path.basename(file_name))
         shutil.move(file_name, TRASH + os.path.basename(file_name))
         delete_cb(file_name)
     except FileNotFoundError:
+        print("file not found {}".format(file_name))
         return "False"
     except Exception as e:
         print("error {}".format(str(e)))
