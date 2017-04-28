@@ -8,6 +8,7 @@ Usage:
     duplicate_finder.py clear [--db=<db_path>]
     duplicate_finder.py show [--db=<db_path>]
     duplicate_finder.py find [--print] [--match-time] [--trash=<trash_path>] [--db=<db_path>]
+    duplicate_finder.py dedup [--confirm] [--match-time] [--trash=<trash_path>]
     duplicate_finder.py -h | –-help
 
 Options:
@@ -23,6 +24,9 @@ Options:
         --match-time          Adds the extra constraint that duplicate images must have the
                               same capture times in order to be considered.
         --trash=<trash_path>  Where files will be put when they are deleted (default: ./Trash)
+
+     dedup:
+        --confirm             Confirm you realize this will delete duplicates automatically.
 """
 
 
@@ -70,10 +74,10 @@ def get_image_files(path):
     def is_image(file_name):
         file_name = file_name.lower()
         return file_name.endswith('.jpg') or  \
-               file_name.endswith('.jpeg') or \
-               file_name.endswith('.png') or  \
-               file_name.endswith('.gif') or  \
-               file_name.endswith('.tiff')
+            file_name.endswith('.jpeg') or \
+            file_name.endswith('.png') or  \
+            file_name.endswith('.gif') or  \
+            file_name.endswith('.tiff')
 
     path = os.path.abspath(path)
     for root, dirs, files in os.walk(path):
@@ -173,6 +177,18 @@ def show(db):
     print("Total: {}".format(total))
 
 
+def same_time(dup):
+    items = dup['items']
+    if "Time unknown" in items:
+        # Since we can't know for sure, better safe than sorry
+        return True
+
+    if len(set([i['capture_time'] for i in items])) > 1:
+        return False
+
+    return True
+
+
 def find(db, print_, match_time):
     dups = db.aggregate([
         {"$group":
@@ -188,29 +204,18 @@ def find(db, print_, match_time):
                                 "image_size": "$image_size",
                                 "capture_time": "$capture_time"
                             }
-                    }
+                }
             }
-        },
+         },
         {"$match":
             {
-                "total" : {"$gt": 1}
+                "total": {"$gt": 1}
             }
-        }])
+         }])
 
     dups = list(dups)
 
     if match_time:
-        def same_time(dup):
-            items = dup['items']
-            if "Time unknown" in items:
-                # Since we can't know for sure, better safe than sorry
-                return True
-
-            if len(set([i['capture_time'] for i in items])) > 1:
-                return False
-
-            return True
-
         dups = [d for d in dups if same_time(d)]
 
     if print_:
@@ -220,33 +225,83 @@ def find(db, print_, match_time):
         display_duplicates(dups, partial(remove_image, db=db))
 
 
+def dedup(db, match_time):
+    dups = db.aggregate([
+        {"$group":
+            {
+                "_id": "$hash",
+                "total": {"$sum": 1},
+                "items":
+                    {
+                        "$push":
+                            {
+                                "file_name": "$_id",
+                                "file_size": "$file_size",
+                                "image_size": "$image_size",
+                                "capture_time": "$capture_time"
+                            }
+                }
+            }
+         },
+        {"$match":
+            {
+                "total": {"$gt": 1}
+            }
+         }])
+
+    dups = list(dups)
+
+    if match_time:
+        dups = [d for d in dups if same_time(d)]
+
+    retrn_dups = []
+    cb = partial(remove_image, db=db)
+    for dup in dups:
+        retrn_dups += [do_delete_picture(x['file_name'], cb)
+                       for x in dup['items'][1:]]
+
+    print("deleted {}/{} files".format(retrn_dups.count("True"),
+                                       len(retrn_dups)))
+
+
+def do_delete_picture(file_name, delete_cb):
+    print("Moving file")
+    file_name = "/" + file_name
+    if not os.path.exists(TRASH):
+        raise Exception("path to trash missing: {}".format(TRASH))
+    try:
+        print(file_name)
+        print(TRASH + os.path.basename(file_name))
+        shutil.move(file_name, TRASH + os.path.basename(file_name))
+        delete_cb(file_name)
+    except FileNotFoundError:
+        print("file not found {}".format(file_name))
+        return "False"
+    except Exception as e:
+        print("error {}".format(str(e)))
+        return "False"
+
+    return "True"
+
+
 def display_duplicates(duplicates, delete_cb):
     with TemporaryDirectory() as folder:
         # Generate all of the HTML files
         chunk_size = 25
         for i, dups in enumerate(chunked(duplicates, chunk_size)):
             with open('{}/{}.html'.format(folder, i), 'w') as f:
-                f.write(render(dups, current=i, total=int(len(duplicates) / chunk_size)))
+                f.write(render(dups, current=i, total=int(
+                    len(duplicates) / chunk_size)))
 
         webbrowser.open("file://{}/{}".format(folder, '0.html'))
 
         app = Flask(__name__)
         @app.route('/picture/<path:file_name>', methods=['DELETE'])
         def delete_picture(file_name):
-            print("Moving file")
-            file_name = "/" + file_name
-
-            try:
-                print(file_name)
-                print(TRASH + os.path.basename(file_name))
-                shutil.move(file_name, TRASH + os.path.basename(file_name))
-                delete_cb(file_name)
-            except FileNotFoundError:
-                return "False"
-
-            return "True"
+            return do_delete_picture(file_name)
 
         app.run()
+
 
 def get_file_size(file_name):
     try:
@@ -254,8 +309,10 @@ def get_file_size(file_name):
     except FileNotFoundError:
         return 0
 
+
 def get_image_size(img):
     return "{} x {}".format(*img.size)
+
 
 def get_capture_time(img):
     try:
@@ -267,6 +324,7 @@ def get_capture_time(img):
         return exif["DateTimeOriginal"]
     except:
         return "Time unknown"
+
 
 def render(duplicates, current, total):
 
@@ -299,6 +357,8 @@ if __name__ == '__main__':
             show(db)
         elif args['find']:
             find(db, args['--print'], args['--match-time'])
-
-
-
+        elif args['dedup']:
+            if not args['--confirm']:
+                print("must --confirm you will dedup files")
+            else:
+                dedup(db, args['--match-time'])
