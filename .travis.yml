@@ -6,4 +6,5 @@ python:
 install:
   - sudo apt-get install -y libblas-dev liblapack-dev libatlas-base-dev gfortran
   - pip install --only-binary=numpy,scipy -r requirements.txt
+  - pip install -r requirements-test.txt
 script: pytest tests/test.py -v
