@@ -3,5 +3,7 @@ python:
   - "3.4"
   - "3.5"
   - "3.6"
-install: "pip install -r requirements.txt"
+install:
+  - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
+  - pip install -r requirements.txt
 script: pytest tests/test.py -v
