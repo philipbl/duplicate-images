@@ -9,10 +9,10 @@ Usage:
     duplicate_finder.py show [--db=<db_path>]
     duplicate_finder.py find [--print] [--match-time] [--trash=<trash_path>] [--db=<db_path>]
     duplicate_finder.py dedup [--confirm] [--match-time] [--trash=<trash_path>]
-    duplicate_finder.py -h | –-help
+    duplicate_finder.py -h | --help
 
 Options:
-    -h, -–help                Show this screen
+    -h, --help                Show this screen
 
     --db=<db_path>            The location of the database. (default: ./db)
 
