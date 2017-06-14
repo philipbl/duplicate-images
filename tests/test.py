@@ -13,7 +13,7 @@ def test_get_image_files(fs):
     for x in images + other:
         fs.CreateFile(x)
 
-    assert list(duplicate_finder.get_image_files('/')) == images
+    assert sorted(list(duplicate_finder.get_image_files('/'))) == sorted(images)
 
 
 def test_hash_file():
