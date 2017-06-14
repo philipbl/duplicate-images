@@ -47,7 +47,7 @@ def test_hash_files_parallel():
 def test_add_to_database():
     db = mongomock.MongoClient().image_database.images
     result = duplicate_finder.hash_file('tests/images/u.jpg')
-    duplicate_finder._add_to_database(*result, db)
+    duplicate_finder._add_to_database(*result, db=db)
 
     db_result = db.find_one({'_id' : result[0]})
 
@@ -58,13 +58,13 @@ def test_add_to_database():
     assert result[4] == db_result['capture_time']
 
     # Duplicate entry should print out an error
-    duplicate_finder._add_to_database(*result, db)
+    duplicate_finder._add_to_database(*result, db=db)
 
 
 def test_in_database():
     db = mongomock.MongoClient().image_database.images
     result = duplicate_finder.hash_file('tests/images/u.jpg')
-    duplicate_finder._add_to_database(*result, db)
+    duplicate_finder._add_to_database(*result, db=db)
 
     assert duplicate_finder._in_database('tests/images/u.jpg', db)
 
@@ -72,7 +72,7 @@ def test_in_database():
 def test_new_image_files():
     db = mongomock.MongoClient().image_database.images
     result = duplicate_finder.hash_file('tests/images/u.jpg')
-    duplicate_finder._add_to_database(*result, db)
+    duplicate_finder._add_to_database(*result, db=db)
 
     results = duplicate_finder.new_image_files(['tests/images/u.jpg', 'another_file'], db)
     results = list(results)

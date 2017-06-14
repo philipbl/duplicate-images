@@ -171,7 +171,7 @@ def add(paths, db):
         files = new_image_files(files, db)
 
         for result in hash_files_parallel(files):
-            _add_to_database(*result, db)
+            _add_to_database(*result, db=db)
 
         cprint("...done", "blue")
 
