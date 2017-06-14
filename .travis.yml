@@ -1,10 +1,9 @@
 language: python
-cache: pip
 python:
   - "3.4"
   - "3.5"
   - "3.6"
 install:
-  - sudo apt-get install libblas-dev liblapack-dev libatlas-base-dev gfortran
-  - pip install -r requirements.txt
+  - sudo apt-get install -y libblas-dev liblapack-dev libatlas-base-dev gfortran
+  - pip install --only-binary=numpy,scipy -r requirements.txt
 script: pytest tests/test.py -v
