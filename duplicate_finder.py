@@ -286,7 +286,7 @@ def do_delete_picture(file_name, delete_cb):
     print("Moving file")
     file_name = "/" + file_name
     if not os.path.exists(TRASH):
-        raise Exception("path to trash missing: {}".format(TRASH))
+        os.makedirs(TRASH)
     try:
         print(file_name)
         print(TRASH + os.path.basename(file_name))

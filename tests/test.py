@@ -157,11 +157,6 @@ def test_dedup():
         # It is still in its original place
         assert os.path.exists(item['file_name'])
 
-    with pytest.raises(Exception):
-        # Trash folder is not there
-        duplicate_finder.dedup(db, match_time=False)
-
-    os.mkdir('Trash')
     duplicate_finder.dedup(db, match_time=False)
 
     for item in dup['items'][1:]:
