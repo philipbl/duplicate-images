@@ -168,7 +168,8 @@ def test_dedup():
         # It is still in its original place
         assert os.path.exists(item['file_name'])
 
-    duplicate_finder.dedup(db, match_time=False)
+    dups = duplicate_finder.find(db)
+    duplicate_finder.delete_duplicates(dups, db)
 
     for item in dup['items'][1:]:
         # The files have been moved
