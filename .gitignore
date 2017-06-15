@@ -1,2 +1,5 @@
 db
 Trash
+.cache
+.coverage
+.python-version
