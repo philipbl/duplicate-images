@@ -229,61 +229,62 @@ def find(db, match_time):
         }
     }])
 
-    dups = list(dups)
-
     if match_time:
-        dups = [d for d in dups if same_time(d)]
+        dups = (d for d in dups if same_time(d))
 
-    return dups
-
+    return list(dups)
 
 def dedup(db, match_time):
     dups = find(db, match_time)
     retrn_dups = []
-    cb = partial(remove_image, db=db)
     for dup in dups:
-        retrn_dups += [do_delete_picture(x['file_name'], cb)
+        retrn_dups += [delete_picture(x['file_name'], db)
                        for x in dup['items'][1:]]
 
-    print("deleted {}/{} files".format(retrn_dups.count("True"),
-                                       len(retrn_dups)))
+    cprint("Deleted {}/{} files".format(retrn_dups.count(True),
+                                        len(retrn_dups)), 'yellow')
 
 
-def do_delete_picture(file_name, delete_cb):
-    print("Moving file")
-    file_name = "/" + file_name
+def delete_picture(file_name, db):
+    cprint("Moving {} to trash".format(os.path.basename(file_name)), 'yellow')
     if not os.path.exists(TRASH):
         os.makedirs(TRASH)
     try:
-        print(file_name)
-        print(TRASH + os.path.basename(file_name))
         shutil.move(file_name, TRASH + os.path.basename(file_name))
-        delete_cb(file_name)
+        remove_image(file_name, db)
     except FileNotFoundError:
-        print("file not found {}".format(file_name))
-        return "False"
+        cprint("File not found {}".format(file_name), 'red')
+        return False
     except Exception as e:
-        print("error {}".format(str(e)))
-        return "False"
+        cprint("Error: {}".format(str(e)), 'red')
+        return False
 
-    return "True"
+    return True
 
 
-def display_duplicates(duplicates, delete_cb):
+def display_duplicates(duplicates, db):
+    def render(duplicates, current, total):
+        env = Environment(loader=FileSystemLoader('template'))
+        template = env.get_template('index.html')
+        return template.render(duplicates=duplicates,
+                               current=current,
+                               total=total)
+
     with TemporaryDirectory() as folder:
         # Generate all of the HTML files
         chunk_size = 25
         for i, dups in enumerate(chunked(duplicates, chunk_size)):
             with open('{}/{}.html'.format(folder, i), 'w') as f:
-                f.write(render(dups, current=i, total=int(
-                    len(duplicates) / chunk_size)))
+                f.write(render(dups,
+                               current=i,
+                               total=round(len(duplicates) / chunk_size)))
 
         webbrowser.open("file://{}/{}".format(folder, '0.html'))
 
         app = Flask(__name__)
         @app.route('/picture/<path:file_name>', methods=['DELETE'])
-        def delete_picture(file_name):
-            return do_delete_picture(file_name)
+        def delete_picture_(file_name):
+            return str(delete_picture(file_name, db))
 
         app.run()
 
@@ -310,13 +311,6 @@ def get_capture_time(img):
     except:
         return "Time unknown"
 
-
-def render(duplicates, current, total):
-
-    env = Environment(loader=FileSystemLoader('template'))
-    template = env.get_template('index.html')
-
-    return template.render(duplicates=duplicates, current=current, total=total)
 
 if __name__ == '__main__':
     from docopt import docopt
@@ -347,7 +341,7 @@ if __name__ == '__main__':
                 pprint(dups)
                 print("Number of duplicates: {}".format(len(dups)))
             else:
-                display_duplicates(dups, partial(remove_image, db=db))
+                display_duplicates(dups, db=db)
 
         elif args['dedup']:
             if not args['--confirm']:

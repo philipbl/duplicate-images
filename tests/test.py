@@ -158,6 +158,7 @@ def test_find():
 def test_dedup():
     db = mongomock.MongoClient().image_database.images
     duplicate_finder.add(['tests'], db)
+    assert db.count() == 4
 
     dups = duplicate_finder.find(db, match_time=False)
     assert len(dups) == 1
@@ -173,6 +174,8 @@ def test_dedup():
         # The files have been moved
         assert not os.path.exists(item['file_name'])
         assert os.path.exists(os.path.join('Trash', os.path.basename(item['file_name'])))
+
+    assert db.count() == 2
 
     # Move files back
     shutil.move('Trash/sideways.jpg', 'tests/images/deeply/nested/image')
