@@ -233,13 +233,10 @@ def find(db, match_time=False):
 
 
 def delete_duplicates(duplicates, db):
-    retrn_dups = []
-    for dup in duplicates:
-        retrn_dups += [delete_picture(x['file_name'], db)
-                       for x in dup['items'][1:]]
-
-    cprint("Deleted {}/{} files".format(retrn_dups.count(True),
-                                        len(retrn_dups)), 'yellow')
+    results = [delete_picture(x['file_name'], db)
+               for dup in duplicates for x in dup['items'][1:]]
+    cprint("Deleted {}/{} files".format(results.count(True),
+                                        len(results)), 'yellow')
 
 
 def delete_picture(file_name, db):
