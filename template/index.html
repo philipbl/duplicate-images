@@ -61,8 +61,23 @@
                 {{ image(names[1], 3) }}
                 {{ image(names[2], 3) }}
                 {{ image(names[3], 3) }}
-            {% else %}
-                {{ names }}
+            {% elif names | count == 5 %}
+                {{ image(names[0], 2) }}
+                {{ image(names[1], 2) }}
+                {{ image(names[2], 2) }}
+                {{ image(names[3], 2) }}
+                {{ image(names[4], 2) }}
+            {% elif names | count == 6 %}
+                {{ image(names[0], 2) }}
+                {{ image(names[1], 2) }}
+                {{ image(names[2], 2) }}
+                {{ image(names[3], 2) }}
+                {{ image(names[4], 2) }}
+                {{ image(names[5], 2) }}
+            {% elif names | count > 6 %}
+                {% for n in names %}
+                    {{ image(n, 1) }}
+                {% endfor %}
             {% endif %}
         </div>
         {% endfor %}
@@ -87,7 +102,7 @@
             var parent = $(this).parent().parent();
 
             $.ajax({
-                url: 'http://127.0.0.1:5000/picture' + file_name,
+                url: 'http://127.0.0.1:5000/picture/' + encodeURIComponent(file_name),
                 // url: '/picture/%2FVolumes',
                 type: 'DELETE',
                 success: function(data) {
