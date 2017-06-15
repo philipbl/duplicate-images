@@ -114,15 +114,15 @@ def hash_file(file):
         hashes.append(str(imagehash.phash(img)))
 
         # 90 degree hash
-        img = img.rotate(90)
+        img = img.rotate(90, expand=True)
         hashes.append(str(imagehash.phash(img)))
 
         # 180 degree hash
-        img = img.rotate(180)
+        img = img.rotate(90, expand=True)
         hashes.append(str(imagehash.phash(img)))
 
         # 270 degree hash
-        img = img.rotate(270)
+        img = img.rotate(90, expand=True)
         hashes.append(str(imagehash.phash(img)))
 
         hashes = ''.join(sorted(hashes))

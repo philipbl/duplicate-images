@@ -23,7 +23,7 @@ def test_hash_file():
     file, hash_, file_size, image_size, capture_time = result
 
     assert file == image_name
-    assert hash_ == '4b9e705db4470db4695c7a14166b2d6dc3a9d0e13c3e87b8e1cbda081e1aa7e9'
+    assert hash_ == '4b9e705db4450db6695cba149e2b2d65c3a950e13c7e8778e1cbda081e12a7eb'
 
     result = duplicate_finder.hash_file('tests/images/nothing.png')
     assert result == None
@@ -41,7 +41,7 @@ def test_hash_files_parallel():
 
     file, hash_, file_size, image_size, capture_time = results[0]
     assert file == 'tests/images/u.jpg'
-    assert hash_ == '4b9e705db4470db4695c7a14166b2d6dc3a9d0e13c3e87b8e1cbda081e1aa7e9'
+    assert hash_ == '4b9e705db4450db6695cba149e2b2d65c3a950e13c7e8778e1cbda081e12a7eb'
 
 
 def test_add_to_database():
@@ -89,7 +89,7 @@ def test_add():
 
     db_result = db.find_one({'_id' : file_name})
     assert db_result['_id'] == file_name
-    assert db_result['hash'] == '4b9e705db4470db4695c7a14166b2d6dc3a9d0e13c3e87b8e1cbda081e1aa7e9'
+    assert db_result['hash'] == '4b9e705db4450db6695cba149e2b2d65c3a950e13c7e8778e1cbda081e12a7eb'
     assert db.count() > 0
 
 
