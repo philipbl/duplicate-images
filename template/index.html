@@ -87,7 +87,7 @@
             var parent = $(this).parent().parent();
 
             $.ajax({
-                url: 'http://127.0.0.1:5000/picture' + file_name,
+                url: 'http://127.0.0.1:5000/picture/' + encodeURIComponent(file_name),
                 // url: '/picture/%2FVolumes',
                 type: 'DELETE',
                 success: function(data) {

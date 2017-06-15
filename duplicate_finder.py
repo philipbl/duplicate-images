@@ -240,7 +240,7 @@ def delete_duplicates(duplicates, db):
 
 
 def delete_picture(file_name, db):
-    cprint("Moving {} to trash".format(os.path.basename(file_name)), 'yellow')
+    cprint("Moving {} to {}".format(file_name, TRASH), 'yellow')
     if not os.path.exists(TRASH):
         os.makedirs(TRASH)
     try:
@@ -257,6 +257,13 @@ def delete_picture(file_name, db):
 
 
 def display_duplicates(duplicates, db):
+    from werkzeug.routing import PathConverter
+    class EverythingConverter(PathConverter):
+        regex = '.*?'
+
+    app = Flask(__name__)
+    app.url_map.converters['everything'] = EverythingConverter
+
     def render(duplicates, current, total):
         env = Environment(loader=FileSystemLoader('template'))
         template = env.get_template('index.html')
@@ -275,8 +282,7 @@ def display_duplicates(duplicates, db):
 
         webbrowser.open("file://{}/{}".format(folder, '0.html'))
 
-        app = Flask(__name__)
-        @app.route('/picture/<path:file_name>', methods=['DELETE'])
+        @app.route('/picture/<everything:file_name>', methods=['DELETE'])
         def delete_picture_(file_name):
             return str(delete_picture(file_name, db))
 
