@@ -212,28 +212,25 @@ def same_time(dup):
 
 
 def find(db, match_time):
-    dups = db.aggregate([
-        {"$group":
-            {
-                "_id": "$hash",
-                "total": {"$sum": 1},
-                "items":
-                    {
-                        "$push":
-                            {
-                                "file_name": "$_id",
-                                "file_size": "$file_size",
-                                "image_size": "$image_size",
-                                "capture_time": "$capture_time"
-                            }
+    dups = db.aggregate([{
+        "$group": {
+            "_id": "$hash",
+            "total": {"$sum": 1},
+            "items": {
+                "$push": {
+                    "file_name": "$_id",
+                    "file_size": "$file_size",
+                    "image_size": "$image_size",
+                    "capture_time": "$capture_time"
                 }
             }
-         },
-        {"$match":
-            {
-                "total": {"$gt": 1}
-            }
-         }])
+        }
+    },
+    {
+        "$match": {
+            "total": {"$gt": 1}
+        }
+    }])
 
     dups = list(dups)
 
@@ -244,34 +241,7 @@ def find(db, match_time):
 
 
 def dedup(db, match_time):
-    dups = db.aggregate([
-        {"$group":
-            {
-                "_id": "$hash",
-                "total": {"$sum": 1},
-                "items":
-                    {
-                        "$push":
-                            {
-                                "file_name": "$_id",
-                                "file_size": "$file_size",
-                                "image_size": "$image_size",
-                                "capture_time": "$capture_time"
-                            }
-                }
-            }
-         },
-        {"$match":
-            {
-                "total": {"$gt": 1}
-            }
-         }])
-
-    dups = list(dups)
-
-    if match_time:
-        dups = [d for d in dups if same_time(d)]
-
+    dups = find(db, match_time)
     retrn_dups = []
     cb = partial(remove_image, db=db)
     for dup in dups:
