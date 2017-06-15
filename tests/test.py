@@ -1,8 +1,11 @@
 import os
+import shutil
 
-import pyfakefs.fake_filesystem as fake_fs
-import duplicate_finder
 import mongomock
+import pyfakefs.fake_filesystem as fake_fs
+import pytest
+
+import duplicate_finder
 
 
 def test_get_image_files(fs):
@@ -30,6 +33,16 @@ def test_hash_file():
 
     result = duplicate_finder.hash_file('tests/images/not_image.txt')
     assert result == None
+
+
+def test_hash_file_rotated():
+    image_name_1 = 'tests/images/u.jpg'
+    image_name_2 = 'tests/images/deeply/nested/image/sideways.jpg'
+
+    result_1 = duplicate_finder.hash_file(image_name_1)
+    result_2 = duplicate_finder.hash_file(image_name_2)
+
+    assert result_1[1] == result_2[1]
 
 
 def test_hash_files_parallel():
@@ -130,3 +143,37 @@ def test_find():
 
     time_dups = duplicate_finder.find(db, match_time=True)
     assert dups == time_dups
+
+
+def test_dedup():
+    db = mongomock.MongoClient().image_database.images
+    duplicate_finder.add(['tests'], db)
+
+    dups = duplicate_finder.find(db, match_time=False)
+    assert len(dups) == 1
+    dup = dups[0]
+
+    for item in dup['items'][1:]:
+        # It is still in its original place
+        assert os.path.exists(item['file_name'])
+
+    with pytest.raises(Exception):
+        # Trash folder is not there
+        duplicate_finder.dedup(db, match_time=False)
+
+    os.mkdir('Trash')
+    duplicate_finder.dedup(db, match_time=False)
+
+    for item in dup['items'][1:]:
+        # The files have been moved
+        assert not os.path.exists(item['file_name'])
+        assert os.path.exists(os.path.join('Trash', os.path.basename(item['file_name'])))
+
+    # Move files back
+    shutil.move('Trash/sideways.jpg', 'tests/images/deeply/nested/image')
+    shutil.move('Trash/smaller.jpg', 'tests/images/deeply/nested/image')
+    os.rmdir('Trash')
+
+
+
+
