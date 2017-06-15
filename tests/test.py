@@ -46,15 +46,25 @@ def test_hash_file_rotated():
 
 
 def test_hash_files_parallel():
-    results = duplicate_finder.hash_files_parallel(['tests/images/u.jpg',
-                                                    'tests/images/nothing.png',
-                                                    'tests/images/not_image.txt'])
+    files = ['tests/images/u.jpg',
+             'tests/images/nothing.png',
+             'tests/images/not_image.txt',
+             'tests/images/deeply/nested/different.jpg',
+             'tests/images/deeply/nested/image/sideways.jpg',
+             'tests/images/deeply/nested/image/smaller.jpg']
+    results = duplicate_finder.hash_files_parallel(files)
     results = list(results)
-    assert len(results) == 1
+    assert len(results) == 4
 
     file, hash_, file_size, image_size, capture_time = results[0]
     assert file == 'tests/images/u.jpg'
     assert hash_ == '4b9e705db4450db6695cba149e2b2d65c3a950e13c7e8778e1cbda081e12a7eb'
+
+
+    duplicate_finder.NUM_PROCESSES = 1
+    results_1_process = duplicate_finder.hash_files_parallel(files)
+    results_1_process = list(results_1_process)
+    assert results_1_process == results
 
 
 def test_add_to_database():
