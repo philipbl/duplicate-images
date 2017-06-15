@@ -32,8 +32,6 @@ Options:
 import concurrent.futures
 from contextlib import contextmanager
 from functools import partial
-from glob import glob
-from multiprocessing import Pool, Value
 import os
 from pprint import pprint
 import shutil
@@ -42,14 +40,13 @@ from tempfile import TemporaryDirectory
 import time
 import webbrowser
 
-import imagehash
-import pymongo
-from pymongo import MongoClient
-from more_itertools import *
-from termcolor import colored, cprint
-from jinja2 import Template, FileSystemLoader, Environment
 from flask import Flask, send_from_directory
+import imagehash
+from jinja2 import Template, FileSystemLoader, Environment
+from more_itertools import chunked
 from PIL import Image, ExifTags
+import pymongo
+from termcolor import colored, cprint
 
 
 TRASH = "./Trash/"
@@ -74,7 +71,7 @@ def connect_to_db():
         pass
 
     cprint("Started database...", "yellow")
-    client = MongoClient()
+    client = pymongo.MongoClient()
     db = client.image_database
     images = db.images
 
