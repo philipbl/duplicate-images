@@ -278,7 +278,7 @@ def display_duplicates(duplicates, db):
             with open('{}/{}.html'.format(folder, i), 'w') as f:
                 f.write(render(dups,
                                current=i,
-                               total=round(len(duplicates) / chunk_size)))
+                               total=round((len(duplicates)+chunk_size-1) / chunk_size)))
 
         webbrowser.open("file://{}/{}".format(folder, '0.html'))
 
