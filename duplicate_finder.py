@@ -36,6 +36,7 @@ from subprocess import Popen, PIPE, TimeoutExpired
 from tempfile import TemporaryDirectory
 import time
 import webbrowser
+import math
 
 from flask import Flask, send_from_directory
 import imagehash
@@ -278,7 +279,7 @@ def display_duplicates(duplicates, db):
             with open('{}/{}.html'.format(folder, i), 'w') as f:
                 f.write(render(dups,
                                current=i,
-                               total=round(len(duplicates) / chunk_size)))
+                               total=math.ceil(len(duplicates) / chunk_size)))
 
         webbrowser.open("file://{}/{}".format(folder, '0.html'))
 
