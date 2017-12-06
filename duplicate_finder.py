@@ -324,7 +324,7 @@ if __name__ == '__main__':
         DB_PATH = args['--db']
 
     if args['--parallel']:
-        NUM_PROCESSES = args['--parallel']
+        NUM_PROCESSES = int(args['--parallel'])
 
     with connect_to_db() as db:
         if args['add']:
