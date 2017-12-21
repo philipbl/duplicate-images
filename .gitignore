@@ -3,3 +3,4 @@ Trash
 .cache
 .coverage
 .python-version
+**/__pycache__
