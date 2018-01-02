@@ -28,28 +28,27 @@ Options:
 
 import concurrent.futures
 from contextlib import contextmanager
-from functools import partial
 import os
 from pprint import pprint
 import shutil
 from subprocess import Popen, PIPE, TimeoutExpired
 from tempfile import TemporaryDirectory
-import time
 import webbrowser
 import math
+import psutil
 
-from flask import Flask, send_from_directory
+from flask import Flask
 import imagehash
-from jinja2 import Template, FileSystemLoader, Environment
+from jinja2 import FileSystemLoader, Environment
 from more_itertools import chunked
 from PIL import Image, ExifTags
 import pymongo
-from termcolor import colored, cprint
+from termcolor import cprint
 
 
 TRASH = "./Trash/"
 DB_PATH = "./db"
-NUM_PROCESSES = 8
+NUM_PROCESSES = psutil.cpu_count()
 
 
 @contextmanager
@@ -324,7 +323,7 @@ if __name__ == '__main__':
         DB_PATH = args['--db']
 
     if args['--parallel']:
-        NUM_PROCESSES = args['--parallel']
+        NUM_PROCESSES = int(args['--parallel'])
 
     with connect_to_db() as db:
         if args['add']:
