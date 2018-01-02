@@ -22,17 +22,17 @@ def test_get_image_files(fs):
 def test_hash_file():
     image_name = 'tests/images/u.jpg'
     result = duplicate_finder.hash_file(image_name)
-    assert result != None
+    assert result is not None
     file, hash_, file_size, image_size, capture_time = result
 
     assert file == image_name
     assert hash_ == '4b9e705db4450db6695cba149e2b2d65c3a950e13c7e8778e1cbda081e12a7eb'
 
     result = duplicate_finder.hash_file('tests/images/nothing.png')
-    assert result == None
+    assert result is None
 
     result = duplicate_finder.hash_file('tests/images/not_image.txt')
-    assert result == None
+    assert result is None
 
 
 def test_hash_file_rotated():
