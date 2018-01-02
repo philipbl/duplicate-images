@@ -35,6 +35,7 @@ from subprocess import Popen, PIPE, TimeoutExpired
 from tempfile import TemporaryDirectory
 import webbrowser
 import math
+import psutil
 
 from flask import Flask
 import imagehash
@@ -47,7 +48,7 @@ from termcolor import cprint
 
 TRASH = "./Trash/"
 DB_PATH = "./db"
-NUM_PROCESSES = 8
+NUM_PROCESSES = psutil.cpu_count()
 
 
 @contextmanager
