@@ -53,31 +53,45 @@ NUM_PROCESSES = psutil.cpu_count()
 
 
 @contextmanager
-def connect_to_db():
-    if not os.path.isdir(DB_PATH):
-        os.makedirs(DB_PATH)
+def connect_to_db(db_conn_string='./db'):
+    p = None
 
-    p = Popen(['mongod', '--dbpath', DB_PATH], stdout=PIPE, stderr=PIPE)
+    # Determine db_conn_string is a mongo URI or a path
+    # If this is a URI
+    if 'mongodb://' == db_conn_string[:10]:
+        client = pymongo.MongoClient(db_conn_string)
+        cprint("Connected server...", "yellow")
+        db = client.image_database
+        images = db.images
 
-    try:
-        p.wait(timeout=2)
-        stdout, stderr = p.communicate()
-        cprint("Error starting mongod", "red")
-        cprint(stdout.decode(), "red")
-        exit()
-    except TimeoutExpired:
-        pass
+    # If this is not a URI
+    else:
+        if not os.path.isdir(db_conn_string):
+            os.makedirs(db_conn_string)
 
-    cprint("Started database...", "yellow")
-    client = pymongo.MongoClient()
-    db = client.image_database
-    images = db.images
+        p = Popen(['mongod', '--dbpath', db_conn_string], stdout=PIPE, stderr=PIPE)
+
+        try:
+            p.wait(timeout=2)
+            stdout, stderr = p.communicate()
+            cprint("Error starting mongod", "red")
+            cprint(stdout.decode(), "red")
+            exit()
+        except TimeoutExpired:
+            pass
+
+        cprint("Started database...", "yellow")
+        client = pymongo.MongoClient()
+        db = client.image_database
+        images = db.images
 
     yield images
 
     client.close()
-    cprint("Stopped database...", "yellow")
-    p.terminate()
+
+    if p is not None:
+        cprint("Stopped database...", "yellow")
+        p.terminate()
 
 
 def get_image_files(path):
@@ -336,7 +350,7 @@ if __name__ == '__main__':
     if args['--parallel']:
         NUM_PROCESSES = int(args['--parallel'])
 
-    with connect_to_db() as db:
+    with connect_to_db(db_conn_string=DB_PATH) as db:
         if args['add']:
             add(args['<path>'], db)
         elif args['remove']:
