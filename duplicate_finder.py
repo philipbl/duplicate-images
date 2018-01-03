@@ -35,6 +35,7 @@ from subprocess import Popen, PIPE, TimeoutExpired
 from tempfile import TemporaryDirectory
 import webbrowser
 import math
+import magic
 
 from flask import Flask
 import imagehash
@@ -79,19 +80,29 @@ def connect_to_db():
 
 
 def get_image_files(path):
+    """
+    Check path recursively for files. If any compatible file is found, it is
+    yielded with its full path.
+
+    :param path:
+    :return: yield absolute path
+    """
     def is_image(file_name):
-        file_name = file_name.lower()
-        return file_name.endswith('.jpg') or  \
-            file_name.endswith('.jpeg') or \
-            file_name.endswith('.png') or  \
-            file_name.endswith('.gif') or  \
-            file_name.endswith('.tiff')
+        # List mime types fully supported by Pillow
+        full_supported_formats = ['gif', 'jp2', 'jpeg', 'pcx', 'png', 'tiff', 'x-ms-bmp',
+                                  'x-portable-pixmap', 'x-xbitmap']
+        try:
+            mime = magic.from_file(file_name, mime=True)
+            return mime.rsplit('/', 1)[1] in full_supported_formats:
+        except IndexError:
+            return False
 
     path = os.path.abspath(path)
     for root, dirs, files in os.walk(path):
         for file in files:
+            file = os.path.join(root, file)
             if is_image(file):
-                yield os.path.join(root, file)
+                yield file
 
 
 def hash_file(file):

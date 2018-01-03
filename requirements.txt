@@ -1,3 +1,4 @@
+python-magic==0.4.15
 Pillow==4.3.0
 jinja2==2.10
 docopt==0.6.2
