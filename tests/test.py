@@ -8,31 +8,30 @@ import pytest
 import duplicate_finder
 
 
-def test_get_image_files(fs):
-    images = ['/file.jpg', '/file.jpeg', '/file.png', '/file.gif',
-              '/file.tiff', '/test/1/2/3/file.jpg']
-    other = ['/file.txt', '/file.md']
+def test_get_image_files():
+    images = ['tests/images/u.jpg', 'tests/images/file.png', 'tests/images/file.gif', 'tests/images/file.tiff',
+              'tests/images/deeply/nested/different.jpg', 'tests/images/deeply/nested/image/sideways.jpg',
+              'tests/images/deeply/nested/image/smaller.jpg']
+    other = ['tests/images/not_image.txt', 'README.md']
 
-    for x in images + other:
-        fs.CreateFile(x)
-
-    assert sorted(list(duplicate_finder.get_image_files('/'))) == sorted(images)
+    assert sorted([str(x).rsplit('/', 1)[1] for x in duplicate_finder.get_image_files('.')]) == \
+           sorted([str(x).rsplit('/', 1)[1] for x in images])
 
 
 def test_hash_file():
     image_name = 'tests/images/u.jpg'
     result = duplicate_finder.hash_file(image_name)
-    assert result != None
+    assert result is not None
     file, hash_, file_size, image_size, capture_time = result
 
     assert file == image_name
     assert hash_ == '4b9e705db4450db6695cba149e2b2d65c3a950e13c7e8778e1cbda081e12a7eb'
 
     result = duplicate_finder.hash_file('tests/images/nothing.png')
-    assert result == None
+    assert result is None
 
     result = duplicate_finder.hash_file('tests/images/not_image.txt')
-    assert result == None
+    assert result is None
 
 
 def test_hash_file_rotated():
@@ -143,13 +142,13 @@ def test_clear():
 
 def test_find():
     db = mongomock.MongoClient().image_database.images
-    duplicate_finder.add(['tests'], db)
+    duplicate_finder.add(['tests/images/deeply/nested'], db)
 
     dups = duplicate_finder.find(db, match_time=False)
     assert len(dups) == 1
 
     dup = dups[0]
-    assert dup['total'] == 3
+    assert dup['total'] == 2
 
     time_dups = duplicate_finder.find(db, match_time=True)
     assert dups == time_dups
@@ -158,10 +157,10 @@ def test_find():
 def test_dedup():
     db = mongomock.MongoClient().image_database.images
     duplicate_finder.add(['tests'], db)
-    assert db.count() == 4
+    assert db.count() == 7
 
     dups = duplicate_finder.find(db, match_time=False)
-    assert len(dups) == 1
+    assert len(dups) == 2
     dup = dups[0]
 
     for item in dup['items'][1:]:
@@ -176,13 +175,10 @@ def test_dedup():
         assert not os.path.exists(item['file_name'])
         assert os.path.exists(os.path.join('Trash', os.path.basename(item['file_name'])))
 
-    assert db.count() == 2
+    assert db.count() == 4
 
     # Move files back
     shutil.move('Trash/sideways.jpg', 'tests/images/deeply/nested/image')
     shutil.move('Trash/smaller.jpg', 'tests/images/deeply/nested/image')
+    shutil.move('Trash/file.png', 'tests/images')
     os.rmdir('Trash')
-
-
-
-

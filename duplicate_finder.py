@@ -8,6 +8,7 @@ Usage:
     duplicate_finder.py clear [--db=<db_path>]
     duplicate_finder.py show [--db=<db_path>]
     duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>]
+    duplicate_finder.py defect <path> ... [--dest=<defective_path>] [--parallel=<num_processes>]
     duplicate_finder.py -h | --help
 
 Options:
@@ -16,7 +17,7 @@ Options:
     --db=<db_path>            The location of the database. (default: ./db)
 
     --parallel=<num_processes> The number of parallel processes to run to hash the image
-                               files (default: 8).
+                               files (default: num of CPU cores).
 
     find:
         --print               Only print duplicate files rather than displaying HTML file
@@ -28,70 +29,93 @@ Options:
 
 import concurrent.futures
 from contextlib import contextmanager
-from functools import partial
 import os
 from pprint import pprint
 import shutil
 from subprocess import Popen, PIPE, TimeoutExpired
 from tempfile import TemporaryDirectory
-import time
 import webbrowser
+import math
+import psutil
+import magic
 
-from flask import Flask, send_from_directory
+from flask import Flask
 import imagehash
-from jinja2 import Template, FileSystemLoader, Environment
+from jinja2 import FileSystemLoader, Environment
 from more_itertools import chunked
 from PIL import Image, ExifTags
 import pymongo
-from termcolor import colored, cprint
-
+from termcolor import cprint
+import re
 
 TRASH = "./Trash/"
 DB_PATH = "./db"
-NUM_PROCESSES = 8
+NUM_PROCESSES = psutil.cpu_count()
 
 
 @contextmanager
-def connect_to_db():
-    if not os.path.isdir(DB_PATH):
-        os.makedirs(DB_PATH)
+def connect_to_db(db_conn_string='./db'):
+    # determine db_conn_string is a mongo URI or a path
+    re_URI = re.compile(r'^mongodb.*://.*$')
+    # if this is a URI
+    if re.match(re_URI, db_conn_string):
+        client = pymongo.MongoClient(db_conn_string)
+        cprint("Connected server...", "yellow")
+        db = client.image_database
+        cprint("Connected DB image_database...", "yellow")
+        images = db.images
+        cprint("Connected collection images...", "yellow")
+    # if this is not a URI
+    else:
+        if not os.path.isdir(db_conn_string):
+            os.makedirs(db_conn_string)
 
-    p = Popen(['mongod', '--dbpath', DB_PATH], stdout=PIPE, stderr=PIPE)
+        p = Popen(['mongod', '--dbpath', db_conn_string], stdout=PIPE, stderr=PIPE)
 
-    try:
-        p.wait(timeout=2)
-        stdout, stderr = p.communicate()
-        cprint("Error starting mongod", "red")
-        cprint(stdout.decode(), "red")
-        exit()
-    except TimeoutExpired:
-        pass
+        try:
+            p.wait(timeout=2)
+            stdout, stderr = p.communicate()
+            cprint("Error starting mongod", "red")
+            cprint(stdout.decode(), "red")
+            exit()
+        except TimeoutExpired:
+            pass
 
-    cprint("Started database...", "yellow")
-    client = pymongo.MongoClient()
-    db = client.image_database
-    images = db.images
+        cprint("Started database...", "yellow")
+        client = pymongo.MongoClient()
+        db = client.image_database
+        images = db.images
 
     yield images
 
     client.close()
-    cprint("Stopped database...", "yellow")
-    p.terminate()
+    if not re.match(re_URI, db_conn_string):
+        cprint("Stopped database...", "yellow")
+        p.terminate()
 
 
 def get_image_files(path):
+    """
+    Check path recursively for files. If any compatible file is found, it is yielded with it's full path.
+    :param path:
+    :return: yield absolute path
+    """
     def is_image(file_name):
-        file_name = file_name.lower()
-        return file_name.endswith('.jpg') or  \
-            file_name.endswith('.jpeg') or \
-            file_name.endswith('.png') or  \
-            file_name.endswith('.gif') or  \
-            file_name.endswith('.tiff')
+        # List mime types fully supported by Pillow
+        full_supported_formats=['gif', 'jp2', 'jpeg', 'pcx', 'png', 'tiff', 'x-ms-bmp', 'x-portable-pixmap',
+                                'x-xbitmap']
+        try:
+            if magic.from_file(file_name, mime=True).rsplit('/', 1)[1] in full_supported_formats:
+                return True
+            else:
+                return False
+        except IndexError:
+            return False
 
     path = os.path.abspath(path)
     for root, dirs, files in os.walk(path):
         for file in files:
-            if is_image(file):
+            if is_image(os.path.join(root, file)):
                 yield os.path.join(root, file)
 
 
@@ -278,7 +302,7 @@ def display_duplicates(duplicates, db):
             with open('{}/{}.html'.format(folder, i), 'w') as f:
                 f.write(render(dups,
                                current=i,
-                               total=round(len(duplicates) / chunk_size)))
+                               total=math.ceil(len(duplicates) / chunk_size)))
 
         webbrowser.open("file://{}/{}".format(folder, '0.html'))
 
@@ -323,9 +347,9 @@ if __name__ == '__main__':
         DB_PATH = args['--db']
 
     if args['--parallel']:
-        NUM_PROCESSES = args['--parallel']
+        NUM_PROCESSES = int(args['--parallel'])
 
-    with connect_to_db() as db:
+    with connect_to_db(db_conn_string=DB_PATH) as db:
         if args['add']:
             add(args['<path>'], db)
         elif args['remove']:
