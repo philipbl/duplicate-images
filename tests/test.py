@@ -10,9 +10,9 @@ import duplicate_finder
 
 def test_get_image_files():
     images = ['tests/images/u.jpg', 'tests/images/file.png', 'tests/images/file.gif', 'tests/images/file.tiff',
-              'tests/images/deeply/nested/different.jpg', 'tests/images/deeply/nested/image/sideways.jpg',
-              'tests/images/deeply/nested/image/smaller.jpg']
-    other = ['tests/images/not_image.txt', 'README.md']
+              'tests/images/image.txt', 'tests/images/deeply/nested/different.jpg',
+              'tests/images/deeply/nested/image/sideways.jpg', 'tests/images/deeply/nested/image/smaller.jpg']
+    other = ['tests/images/not_image.txt', 'tests/images/not_image.jpb', 'README.md']
 
     assert sorted([str(x).rsplit('/', 1)[1] for x in duplicate_finder.get_image_files('.')]) == \
            sorted([str(x).rsplit('/', 1)[1] for x in images])
@@ -157,28 +157,28 @@ def test_find():
 def test_dedup():
     db = mongomock.MongoClient().image_database.images
     duplicate_finder.add(['tests'], db)
-    assert db.count() == 7
+    assert db.count() == 8
 
     dups = duplicate_finder.find(db, match_time=False)
     assert len(dups) == 2
-    dup = dups[0]
 
-    for item in dup['items'][1:]:
-        # It is still in its original place
-        assert os.path.exists(item['file_name'])
-
-    dups = duplicate_finder.find(db)
     duplicate_finder.delete_duplicates(dups, db)
 
+    dup = dups[0]
+
+    # The first item should still be in its original place
+    assert os.path.exists(dup['items'][0]['file_name'])
+
+    # The rest of the files should be moved to the trash
     for item in dup['items'][1:]:
-        # The files have been moved
         assert not os.path.exists(item['file_name'])
         assert os.path.exists(os.path.join('Trash', os.path.basename(item['file_name'])))
 
     assert db.count() == 4
 
     # Move files back
-    shutil.move('Trash/sideways.jpg', 'tests/images/deeply/nested/image')
-    shutil.move('Trash/smaller.jpg', 'tests/images/deeply/nested/image')
-    shutil.move('Trash/file.png', 'tests/images')
+    for dup in dups:
+        for item in dup['items'][1:]:
+            shutil.move(os.path.join('Trash', os.path.basename(item['file_name'])),
+                        item['file_name'])
     os.rmdir('Trash')
