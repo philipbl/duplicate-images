@@ -112,6 +112,11 @@ def show(db):
               help='Path to where files will be put when they are deleted.')
 @click.pass_obj
 def find(db, print, delete, match_time, trash):
+
+    if delete and not click.confirm('Are you sure you want to delete all duplicate images?'):
+        click.echo("Aborted!")
+        return
+
     cprint("Finding duplicates...", "blue")
     duplicates = db.find_duplicates(match_time)
     cprint("...done", "blue")
@@ -132,7 +137,7 @@ def find(db, print, delete, match_time, trash):
             for file_info in dup['items'][1:]:
                 results.append(delete_image(file_info['file_name'], db, trash))
 
-        cprint("Deleted {}/{} files".format(results.count(True), len(results)),
+        cprint("\tDeleted {}/{} files".format(results.count(True), len(results)),
                "yellow")
         cprint("...done", "blue")
     else:
