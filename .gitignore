@@ -1,4 +1,6 @@
 db
+db.json
+db.sqlite
 Trash
 .cache
 .coverage
