@@ -37,6 +37,7 @@ import webbrowser
 import math
 
 from flask import Flask
+from flask_cors import CORS
 import imagehash
 from jinja2 import FileSystemLoader, Environment
 from more_itertools import chunked
@@ -261,6 +262,7 @@ def display_duplicates(duplicates, db):
         regex = '.*?'
 
     app = Flask(__name__)
+    CORS(app)
     app.url_map.converters['everything'] = EverythingConverter
 
     def render(duplicates, current, total):
