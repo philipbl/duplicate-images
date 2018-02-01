@@ -36,11 +36,11 @@ def cli(ctx, db, db_location):
     ctx.obj = DBs[db](DB_LOCATIONS[db])
 
 
-@cli.command()
+@cli.command(short_help="Processes all images in given path(s), adding them to the database.")
 @click.argument('paths', nargs=-1, type=click.Path(exists=True))
 @click.option('--parallel', default=psutil.cpu_count(), show_default=True)
 @click.pass_obj
-def add(db, paths, parallel):
+def add_paths(db, paths, parallel):
     def new_image_files(files):
         for file in files:
             if db.contains(file):
@@ -64,10 +64,10 @@ def add(db, paths, parallel):
         cprint("...done", "blue")
 
 
-@cli.command()
+@cli.command(short_help="Removes all images information in the given path(s) from database.")
 @click.argument('paths', nargs=-1, type=click.Path(exists=True))
 @click.pass_obj
-def remove(db, paths):
+def remove_paths(db, paths):
     total = 0
 
     for path in paths:
@@ -83,22 +83,22 @@ def remove(db, paths):
     cprint("Images removed in database: {}".format(total), "blue")
 
 
-@cli.command()
+@cli.command(short_help="Clears database.")
 @click.confirmation_option(prompt="Are you sure you want to clear the database?")
 @click.pass_obj
-def clear(db):
+def clear_db(db):
     db.clear()
     cprint("Database was cleared", "blue")
 
 
-@cli.command()
+@cli.command(short_help="Prints out all image information stored in database.")
 @click.pass_obj
-def show(db):
+def show_db(db):
     pprint(db.all())
     cprint("Total: {}".format(db.count()), "blue")
 
 
-@cli.command()
+@cli.command(short_help='Searches database for duplicate images.')
 @click.option('--print', is_flag=True,
               help='Only print duplicate files rather than displaying HTML '
                    'file. This option takes priority over --delete.')
