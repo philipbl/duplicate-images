@@ -60,10 +60,10 @@ Usage:
 Options:
     -h, --help                Show this screen
 
-    --db=<db_path>            The location of the database. (default: ./db)
+    --db=<db_path>            The location of the database or a MongoDB URI. (default: ./db)
 
     --parallel=<num_processes> The number of parallel processes to run to hash the image
-                               files (default: 8).
+                               files (default: number of CPUs).
 
     find:
         --print               Only print duplicate files rather than displaying HTML file
