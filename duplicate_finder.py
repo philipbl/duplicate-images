@@ -3,27 +3,31 @@
 A tool to find and remove duplicate pictures.
 
 Usage:
-    duplicate_finder.py add <path> ... [--db=<db_path>] [--parallel=<num_processes>]
-    duplicate_finder.py remove <path> ... [--db=<db_path>]
-    duplicate_finder.py clear [--db=<db_path>]
-    duplicate_finder.py show [--db=<db_path>]
-    duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>]
+    duplicate_finder.py add <path> ... [--db=<db_path>] [--db-name=<db-name>] [--db-collection=<collection-name>] [--parallel=<num_processes>]
+    duplicate_finder.py remove <path> ... [--db=<db_path>] [--db-name=<db-name>] [--db-collection=<collection-name>]
+    duplicate_finder.py clear [--db=<db_path>] [--db-name=<db-name>] [--db-collection=<collection-name>]
+    duplicate_finder.py show [--db=<db_path>] [--db-name=<db-name>] [--db-collection=<collection-name>]
+    duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>] [--db-name=<db-name>] [--db-collection=<collection-name>]
     duplicate_finder.py -h | --help
 
 Options:
-    -h, --help                Show this screen
+    -h, --help                 Show this screen
 
-    --db=<db_path>            The location of the database or a MongoDB URI. (default: ./db)
+    --db=<db_path>             The location of the database or a MongoDB URI. (default: ./db)
+
+    --db-name=<db-name>        The name of the database to use. (default: image_database)
+
+    --db-collection=<collection-name>   The name of the collection inside the database. (default: images)
 
     --parallel=<num_processes> The number of parallel processes to run to hash the image
                                files (default: number of CPUs).
 
     find:
-        --print               Only print duplicate files rather than displaying HTML file
-        --delete              Move all found duplicate pictures to the trash. This option takes priority over --print.
-        --match-time          Adds the extra constraint that duplicate images must have the
-                              same capture times in order to be considered.
-        --trash=<trash_path>  Where files will be put when they are deleted (default: ./Trash)
+        --print                Only print duplicate files rather than displaying HTML file
+        --delete               Move all found duplicate pictures to the trash. This option takes priority over --print.
+        --match-time           Adds the extra constraint that duplicate images must have the
+                               same capture times in order to be considered.
+        --trash=<trash_path>   Where files will be put when they are deleted (default: ./Trash)
 """
 
 import concurrent.futures
@@ -54,7 +58,7 @@ NUM_PROCESSES = psutil.cpu_count()
 
 
 @contextmanager
-def connect_to_db(db_conn_string='./db'):
+def connect_to_db(db_conn_string='./db', db_name='image_database', db_coll='images'):
     p = None
 
     # Determine db_conn_string is a mongo URI or a path
@@ -62,8 +66,6 @@ def connect_to_db(db_conn_string='./db'):
     if 'mongodb://' == db_conn_string[:10] or 'mongodb+srv://' == db_conn_string[:14]:
         client = pymongo.MongoClient(db_conn_string)
         cprint("Connected server...", "yellow")
-        db = client.image_database
-        images = db.images
 
     # If this is not a URI
     else:
@@ -83,8 +85,9 @@ def connect_to_db(db_conn_string='./db'):
 
         cprint("Started database...", "yellow")
         client = pymongo.MongoClient()
-        db = client.image_database
-        images = db.images
+
+    db = client[db_name]
+    images = db[db_coll]
 
     yield images
 
@@ -349,10 +352,20 @@ if __name__ == '__main__':
     if args['--db']:
         DB_PATH = args['--db']
 
+    if args['--db-name']:
+        DB_NAME = args['--db-name']
+    else:
+        DB_NAME = 'image_database'
+
+    if args['--db-collection']:
+        DB_COLL = args['--db-collection']
+    else:
+        DB_COLL = 'images'
+
     if args['--parallel']:
         NUM_PROCESSES = int(args['--parallel'])
 
-    with connect_to_db(db_conn_string=DB_PATH) as db:
+    with connect_to_db(db_conn_string=DB_PATH, db_name=DB_NAME, db_coll=DB_COLL) as db:
         if args['add']:
             add(args['<path>'], db)
         elif args['remove']:
