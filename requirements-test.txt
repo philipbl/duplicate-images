@@ -1,4 +1,14 @@
-mongomock==3.8.0
-pyfakefs==3.2
-pytest==3.1.2
+-i https://pypi.org/simple
+attrs==17.4.0
+coverage==4.5.1
+mock==2.0.0
+mongomock==3.9.0
+more-itertools==4.1.0
+pbr==4.0.2
+pluggy==0.6.0
+py==1.5.3
+pyfakefs==3.4.1
 pytest-cov==2.5.1
+pytest==3.5.1
+sentinels==1.0.0
+six==1.11.0
