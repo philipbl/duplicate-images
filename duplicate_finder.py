@@ -3,27 +3,31 @@
 A tool to find and remove duplicate pictures.
 
 Usage:
-    duplicate_finder.py add <path> ... [--db=<db_path>] [--parallel=<num_processes>]
-    duplicate_finder.py remove <path> ... [--db=<db_path>]
-    duplicate_finder.py clear [--db=<db_path>]
-    duplicate_finder.py show [--db=<db_path>]
-    duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>]
+    duplicate_finder.py add <path> ... [--db=<db_path>] [--db-name=<db-name>] [--db-collection=<collection-name>] [--parallel=<num_processes>]
+    duplicate_finder.py remove <path> ... [--db=<db_path>] [--db-name=<db-name>] [--db-collection=<collection-name>]
+    duplicate_finder.py clear [--db=<db_path>] [--db-name=<db-name>] [--db-collection=<collection-name>]
+    duplicate_finder.py show [--db=<db_path>] [--db-name=<db-name>] [--db-collection=<collection-name>]
+    duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>] [--db-name=<db-name>] [--db-collection=<collection-name>]
     duplicate_finder.py -h | --help
 
 Options:
-    -h, --help                Show this screen
+    -h, --help                 Show this screen
 
-    --db=<db_path>            The location of the database or a MongoDB URI. (default: ./db)
+    --db=<db_path>             The location of the database or a MongoDB URI. (default: ./db)
+
+    --db-name=<db-name>        The name of the database to use. (default: image_database)
+
+    --db-collection=<collection-name>   The name of the collection inside the database. (default: images)
 
     --parallel=<num_processes> The number of parallel processes to run to hash the image
                                files (default: number of CPUs).
 
     find:
-        --print               Only print duplicate files rather than displaying HTML file
-        --delete              Move all found duplicate pictures to the trash. This option takes priority over --print.
-        --match-time          Adds the extra constraint that duplicate images must have the
-                              same capture times in order to be considered.
-        --trash=<trash_path>  Where files will be put when they are deleted (default: ./Trash)
+        --print                Only print duplicate files rather than displaying HTML file
+        --delete               Move all found duplicate pictures to the trash. This option takes priority over --print.
+        --match-time           Adds the extra constraint that duplicate images must have the
+                               same capture times in order to be considered.
+        --trash=<trash_path>   Where files will be put when they are deleted (default: ./Trash)
 """
 
 import concurrent.futures
