@@ -54,7 +54,7 @@ NUM_PROCESSES = psutil.cpu_count()
 
 
 @contextmanager
-def connect_to_db(db_conn_string='./db'):
+def connect_to_db(db_conn_string='./db', db_name='image_database', db_coll='images'):
     p = None
 
     # Determine db_conn_string is a mongo URI or a path
@@ -62,8 +62,6 @@ def connect_to_db(db_conn_string='./db'):
     if 'mongodb://' == db_conn_string[:10]:
         client = pymongo.MongoClient(db_conn_string)
         cprint("Connected server...", "yellow")
-        db = client.image_database
-        images = db.images
 
     # If this is not a URI
     else:
@@ -83,8 +81,9 @@ def connect_to_db(db_conn_string='./db'):
 
         cprint("Started database...", "yellow")
         client = pymongo.MongoClient()
-        db = client.image_database
-        images = db.images
+
+    db = client[db_name]
+    images = db[db_coll]
 
     yield images
 
@@ -349,10 +348,20 @@ if __name__ == '__main__':
     if args['--db']:
         DB_PATH = args['--db']
 
+    if args['--db-name']:
+        DB_NAME = args['--db-name']
+    else:
+        DB_NAME = 'image_database'
+
+    if args['--db-collection']:
+        DB_COLL = args['--db-collection']
+    else:
+        DB_COLL = 'images'
+
     if args['--parallel']:
         NUM_PROCESSES = int(args['--parallel'])
 
-    with connect_to_db(db_conn_string=DB_PATH) as db:
+    with connect_to_db(db_conn_string=DB_PATH, db_name=DB_NAME, db_coll=DB_COLL) as db:
         if args['add']:
             add(args['<path>'], db)
         elif args['remove']:
