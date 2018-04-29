@@ -59,7 +59,7 @@ def connect_to_db(db_conn_string='./db'):
 
     # Determine db_conn_string is a mongo URI or a path
     # If this is a URI
-    if 'mongodb://' == db_conn_string[:10]:
+    if 'mongodb://' == db_conn_string[:10] or 'mongodb+srv://' == db_conn_string[:14]:
         client = pymongo.MongoClient(db_conn_string)
         cprint("Connected server...", "yellow")
         db = client.image_database
