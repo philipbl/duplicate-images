@@ -1,0 +1,27 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+docopt = "*"
+more-itertools = "*"
+pymongo = "*"
+python-magic = "*"
+termcolor = "*"
+Flask = "*"
+ImageHash = "*"
+"Jinja2" = "*"
+Pillow = "*"
+Werkzeug = "*"
+Flask-Cors = "*"
+dnspython = "*"
+
+[dev-packages]
+mongomock = "*"
+pyfakefs = "*"
+pytest = "*"
+pytest-cov = "*"
+
+[requires]
+python_version = "3.6"
