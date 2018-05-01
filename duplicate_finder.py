@@ -127,20 +127,13 @@ def hash_file(file):
         image_size = get_image_size(img)
         capture_time = get_capture_time(img)
 
-        # 0 degree hash
-        hashes.append(str(imagehash.phash(img)))
-
-        # 90 degree hash
-        img = img.rotate(90, expand=True)
-        hashes.append(str(imagehash.phash(img)))
-
-        # 180 degree hash
-        img = img.rotate(90, expand=True)
-        hashes.append(str(imagehash.phash(img)))
-
-        # 270 degree hash
-        img = img.rotate(90, expand=True)
-        hashes.append(str(imagehash.phash(img)))
+        # hash the image 4 times and rotate it by 90 degrees each time
+        for angle in [ 0, 90, 180, 270 ]:
+            if angle > 0:
+                turned_img = img.rotate(angle, expand=True)
+            else:
+                turned_img = img
+            hashes.append(str(imagehash.phash(turned_img)))
 
         hashes = ''.join(sorted(hashes))
 
