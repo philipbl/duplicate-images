@@ -6,7 +6,6 @@ name = "pypi"
 [packages]
 docopt = "*"
 more-itertools = "*"
-psutil = "*"
 pymongo = "*"
 python-magic = "*"
 termcolor = "*"
