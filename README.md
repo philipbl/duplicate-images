@@ -32,6 +32,26 @@ Last, run script:
 python duplicate_finder.py
 ```
 
+## On Ubuntu 18.04
+
+```bash
+# Install Mongo and pip
+sudo apt -y install mongodb-server python3-pip
+# Disable Mongo service autostart
+sudo systemctl disable mongodb.service
+# Stop Mongo service
+sudo service mongodb stop
+```
+
+Python 2 is the default version of Python, so we have to call `python3` explicitely:
+
+```bash
+# Install dependencies with Python 3
+pip3 install -r requirements.txt
+# “python duplicate_finder.py” will fail, so we have to use Python 3 for every call:
+python3 duplicate_finder.py …
+```
+
 ## Example
 
 ```bash
