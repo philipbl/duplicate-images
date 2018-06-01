@@ -29,7 +29,7 @@ Options:
 import concurrent.futures
 from contextlib import contextmanager
 import os
-import magic
+import imghdr
 import math
 from pprint import pprint
 import psutil
@@ -46,7 +46,11 @@ from more_itertools import chunked
 from PIL import Image, ExifTags
 import pymongo
 from termcolor import cprint
+import codecs
+import sys
 
+scriptDir = os.path.dirname(os.path.realpath(sys.argv[0]))
+os.chdir(scriptDir)
 
 TRASH = "./Trash/"
 DB_PATH = "./db"
@@ -104,14 +108,7 @@ def get_image_files(path):
     :return: yield absolute path
     """
     def is_image(file_name):
-        # List mime types fully supported by Pillow
-        full_supported_formats = ['gif', 'jp2', 'jpeg', 'pcx', 'png', 'tiff', 'x-ms-bmp',
-                                  'x-portable-pixmap', 'x-xbitmap']
-        try:
-            mime = magic.from_file(file_name, mime=True)
-            return mime.rsplit('/', 1)[1] in full_supported_formats
-        except IndexError:
-            return False
+        return imghdr.what(file_name)
 
     path = os.path.abspath(path)
     for root, dirs, files in os.walk(path):
@@ -302,7 +299,7 @@ def display_duplicates(duplicates, db):
         # Generate all of the HTML files
         chunk_size = 25
         for i, dups in enumerate(chunked(duplicates, chunk_size)):
-            with open('{}/{}.html'.format(folder, i), 'w') as f:
+            with codecs.open('{}/{}.html'.format(folder, i), 'w', 'utf-8') as f:
                 f.write(render(dups,
                                current=i,
                                total=math.ceil(len(duplicates) / chunk_size)))
