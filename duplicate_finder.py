@@ -149,7 +149,7 @@ def hash_file(file):
 
 
 def hash_files_parallel(files):
-    with concurrent.futures.ProcessPoolExecutor(max_workers=NUM_PROCESSES) as executor:
+    with concurrent.futures.ProcessPoolExecutor() as executor:
         for result in executor.map(hash_file, files):
             if result is not None:
                 yield result
