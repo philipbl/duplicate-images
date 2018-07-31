@@ -252,19 +252,19 @@ def find(db, match_time=False):
     return list(dups)
 
 
-def delete_duplicates(duplicates, db):
-    results = [delete_picture(x['file_name'], db)
+def delete_duplicates(duplicates, db, trash='./Trash/'):
+    results = [delete_picture(x['file_name'], db, trash)
                for dup in duplicates for x in dup['items'][1:]]
     cprint("Deleted {}/{} files".format(results.count(True),
                                         len(results)), 'yellow')
 
 
-def delete_picture(file_name, db):
-    cprint("Moving {} to {}".format(file_name, TRASH), 'yellow')
-    if not os.path.exists(TRASH):
-        os.makedirs(TRASH)
+def delete_picture(file_name, db, trash='./Trash/'):
+    cprint("Moving {} to {}".format(file_name, trash), 'yellow')
+    if not os.path.exists(trash):
+        os.makedirs(trash)
     try:
-        shutil.move(file_name, TRASH + os.path.basename(file_name))
+        shutil.move(file_name, trash + os.path.basename(file_name))
         remove_image(file_name, db)
     except FileNotFoundError:
         cprint("File not found {}".format(file_name), 'red')
@@ -365,7 +365,7 @@ if __name__ == '__main__':
             dups = find(db, args['--match-time'])
 
             if args['--delete']:
-                delete_duplicates(dups, db)
+                delete_duplicates(dups, db, TRASH)
             elif args['--print']:
                 pprint(dups)
                 print("Number of duplicates: {}".format(len(dups)))
