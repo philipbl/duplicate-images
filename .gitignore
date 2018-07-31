@@ -4,3 +4,4 @@ Trash
 .coverage
 .python-version
 **/__pycache__
+.idea
