@@ -10,3 +10,4 @@ python-magic==0.4.15
 termcolor==1.1.0
 Werkzeug==0.12.2
 Flask-Cors==3.0.3
+dnspython>=1.15.0
