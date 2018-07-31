@@ -36,7 +36,6 @@ import shutil
 from subprocess import Popen, PIPE, TimeoutExpired
 from tempfile import TemporaryDirectory
 import webbrowser
-
 from flask import Flask
 from flask_cors import CORS
 import imagehash
