@@ -32,7 +32,6 @@ import os
 import magic
 import math
 from pprint import pprint
-import psutil
 import shutil
 from subprocess import Popen, PIPE, TimeoutExpired
 from tempfile import TemporaryDirectory
@@ -46,11 +45,6 @@ from more_itertools import chunked
 from PIL import Image, ExifTags
 import pymongo
 from termcolor import cprint
-
-
-TRASH = "./Trash/"
-DB_PATH = "./db"
-NUM_PROCESSES = psutil.cpu_count()
 
 
 @contextmanager
@@ -345,12 +339,18 @@ if __name__ == '__main__':
 
     if args['--trash']:
         TRASH = args['--trash']
+    else:
+        TRASH = "./Trash/"
 
     if args['--db']:
         DB_PATH = args['--db']
+    else:
+        DB_PATH = "./db"
 
     if args['--parallel']:
         NUM_PROCESSES = int(args['--parallel'])
+    else:
+        NUM_PROCESSES = None
 
     with connect_to_db(db_conn_string=DB_PATH) as db:
         if args['add']:
