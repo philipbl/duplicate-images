@@ -9,7 +9,7 @@
 {% macro image(img, size) -%}
 <div class="col-xs-{{ size }}">
     <div class="thumbnail">
-        <img class="img-responsive" src="{{ img['file_name'] }}" alt="{{ img['file_name'] }}">
+        <img class="img-responsive" src="picture/{{ img['file_name'] }}" alt="{{ img['file_name'] }}">
         <div class="caption">
             <h5 class="name">{{ img['file_name'] }}</h5>
             <div class="file-size">{{ img['file_size'] | filesizeformat }}</div>
@@ -32,13 +32,13 @@
         {% if current == 0 %}
         <li class="disabled"><span>Previous</span></li>
         {% else %}
-        <li><a href="{{ current - 1}}.html">Previous</a></li>
+        <li><a href="?current={{ current - 1 }}">Previous</a></li>
         {% endif %}
 
         {% if current == (total - 1) %}
         <li class="disabled"><span>Next</span></li>
         {% else %}
-        <li><a href="{{ current + 1 }}.html">Next</a></li>
+        <li><a href="?current={{ current + 1 }}">Next</a></li>
         {% endif %}
     </ul>
 </nav>
