@@ -2,7 +2,7 @@ import json
 import math
 import webbrowser
 
-from flask import Flask, request, send_from_directory, send_file
+from flask import Flask, jsonify, request, send_from_directory, send_file
 from flask_cors import CORS
 from jinja2 import FileSystemLoader, Environment
 from werkzeug.routing import PathConverter
@@ -37,6 +37,10 @@ def display_duplicates(duplicates, delete_cb, duplicates_per_page=10):
         return template.render(duplicates=duplicates[start:end],
                                current=current,
                                total=total)
+
+    @app.route('/json', methods=['GET'])
+    def get_json():
+        return jsonify(duplicates)
 
     @app.route('/picture/<everything:file_name>', methods=['GET'])
     def get_picture(file_name):
