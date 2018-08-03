@@ -1,3 +1,4 @@
+import functools
 import os
 from pprint import pprint
 import shutil
@@ -10,6 +11,7 @@ from database.mongodb import MongoDB
 from database.sqlite import SQLite
 from database.tinydb import TinyDB
 from images import get_image_files, hash_files
+import display
 
 
 DBs = {'mongodb': MongoDB,
@@ -140,8 +142,11 @@ def find(db, print, delete, match_time, trash):
         cprint("\tDeleted {}/{} files".format(results.count(True), len(results)),
                "yellow")
         cprint("...done", "blue")
-    else:
-        display_duplicates(duplicates, db, trash)
+        return
+
+    # If no options were set, display duplicates
+    delete_cb = functools.partial(delete_image, db=db, trash=trash)
+    display.display_duplicates(duplicates, delete_cb)
 
 
 def delete_image(file_name, db, trash):
