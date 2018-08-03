@@ -6,8 +6,8 @@
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
 </head>
 
-{% macro image(img, size) -%}
-<div class="col-xs-{{ size }}">
+{% macro image(img) -%}
+<div class="col">
     <div class="thumbnail">
         <img class="img-responsive" src="picture/{{ img['file_name'] }}" alt="{{ img['file_name'] }}">
         <div class="caption">
@@ -46,40 +46,14 @@
 
 <body>
     <div class="container">
+        {{ pagination(current, total) }}
+
         {% for dup in duplicates %}
-        <div class="row" style="margin: 15px; margin-bottom: 30px;">
-            {% set names = dup['items'] %}
-            {% if names | count == 2 %}
-                {{ image(names[0], 6) }}
-                {{ image(names[1], 6) }}
-            {% elif names | count == 3 %}
-                {{ image(names[0], 4) }}
-                {{ image(names[1], 4) }}
-                {{ image(names[2], 4) }}
-            {% elif names | count == 4 %}
-                {{ image(names[0], 3) }}
-                {{ image(names[1], 3) }}
-                {{ image(names[2], 3) }}
-                {{ image(names[3], 3) }}
-            {% elif names | count == 5 %}
-                {{ image(names[0], 2) }}
-                {{ image(names[1], 2) }}
-                {{ image(names[2], 2) }}
-                {{ image(names[3], 2) }}
-                {{ image(names[4], 2) }}
-            {% elif names | count == 6 %}
-                {{ image(names[0], 2) }}
-                {{ image(names[1], 2) }}
-                {{ image(names[2], 2) }}
-                {{ image(names[3], 2) }}
-                {{ image(names[4], 2) }}
-                {{ image(names[5], 2) }}
-            {% elif names | count > 6 %}
-                {% for n in names %}
-                    {{ image(n, 1) }}
+            <div class="row" style="margin: 15px; margin-bottom: 30px;">
+                {% for img in dup['items'] %}
+                    {{ image(img) }}
                 {% endfor %}
-            {% endif %}
-        </div>
+            </div>
         {% endfor %}
 
         {{ pagination(current, total) }}
