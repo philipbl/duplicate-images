@@ -101,7 +101,7 @@ def show_db(db):
 
 
 @cli.command(short_help='Searches database for duplicate images.')
-@click.option('--print', is_flag=True,
+@click.option('--print', 'print_duplicates', is_flag=True,
               help='Only print duplicate files rather than displaying HTML '
                    'file. This option takes priority over --delete.')
 @click.option('--delete', is_flag=True,
@@ -113,7 +113,7 @@ def show_db(db):
               default='./Trash', show_default=True,
               help='Path to where files will be put when they are deleted.')
 @click.pass_obj
-def find(db, print, delete, match_time, trash):
+def find(db, print_duplicates, delete, match_time, trash):
 
     if delete and not click.confirm('Are you sure you want to delete all duplicate images?'):
         click.echo("Aborted!")
@@ -123,14 +123,13 @@ def find(db, print, delete, match_time, trash):
     duplicates = db.find_duplicates(match_time)
     cprint("...done", "blue")
 
-    if print:
+    if print_duplicates:
         pprint(duplicates)
         cprint("Number of duplicates: {}".format(len(duplicates)), "blue")
         return
 
-    # Make the trash folder if necessary
-    if not os.path.exists(trash):
-        os.makedirs(trash)
+    trash = os.path.normpath(trash)
+    os.makedirs(trash, exist_ok=True)
 
     if delete:
         cprint("Deleting duplicates...", "blue")
