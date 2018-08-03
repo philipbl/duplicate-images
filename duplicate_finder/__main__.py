@@ -10,8 +10,8 @@ from termcolor import cprint
 from database.mongodb import MongoDB
 from database.sqlite import SQLite
 from database.tinydb import TinyDB
-from images import get_image_files, hash_files
 import display
+import images
 
 
 DBs = {'mongodb': MongoDB,
@@ -52,10 +52,10 @@ def add_paths(db, paths, parallel):
 
     for path in paths:
         cprint("Hashing {}".format(path), "blue")
-        files = get_image_files(path)
+        files = images.get_image_files(path)
         files = new_image_files(files)
 
-        for file, result in hash_files(files, parallel):
+        for file, result in images.hash_files(files, parallel):
             if result is None:
                 cprint("\tUnable to open {}".format(file), "red")
                 continue
@@ -74,7 +74,7 @@ def remove_paths(db, paths):
 
     for path in paths:
         cprint("Removing image files in database from {}".format(path), "blue")
-        files = get_image_files(path)
+        files = images.get_image_files(path)
 
         for file in files:
             cprint("\tRemoving {}".format(file), "green")
