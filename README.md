@@ -1,5 +1,7 @@
 # Duplicate Image Finder
 
+![](https://api.travis-ci.org/philipbl/duplicate-images.svg)
+
 This Python script finds duplicate images using a [perspective hash (pHash)](http://www.phash.org) to compare images. pHash ignores the image size and file size and instead creates a hash based on the pixels of the image. This allows you to find duplicate pictures that have been rotated, have changed metadata, and slightly edited.
 
 This script hashes images added to it, storing the hash into a database (MongoDB). To find duplicate images, hashes are compared. If the hash is the same between two images, then they are marked as duplicates. A web interface is provided to delete duplicate images easily. If you are feeling lucky, there is an option to automatically delete duplicate files.
