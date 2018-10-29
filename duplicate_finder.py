@@ -32,7 +32,6 @@ import os
 import magic
 import math
 from pprint import pprint
-import psutil
 import shutil
 from subprocess import Popen, PIPE, TimeoutExpired
 from tempfile import TemporaryDirectory
@@ -46,11 +45,6 @@ from more_itertools import chunked
 from PIL import Image, ExifTags
 import pymongo
 from termcolor import cprint
-
-
-TRASH = "./Trash/"
-DB_PATH = "./db"
-NUM_PROCESSES = psutil.cpu_count()
 
 
 @contextmanager
@@ -130,20 +124,13 @@ def hash_file(file):
         image_size = get_image_size(img)
         capture_time = get_capture_time(img)
 
-        # 0 degree hash
-        hashes.append(str(imagehash.phash(img)))
-
-        # 90 degree hash
-        img = img.rotate(90, expand=True)
-        hashes.append(str(imagehash.phash(img)))
-
-        # 180 degree hash
-        img = img.rotate(90, expand=True)
-        hashes.append(str(imagehash.phash(img)))
-
-        # 270 degree hash
-        img = img.rotate(90, expand=True)
-        hashes.append(str(imagehash.phash(img)))
+        # hash the image 4 times and rotate it by 90 degrees each time
+        for angle in [ 0, 90, 180, 270 ]:
+            if angle > 0:
+                turned_img = img.rotate(angle, expand=True)
+            else:
+                turned_img = img
+            hashes.append(str(imagehash.phash(turned_img)))
 
         hashes = ''.join(sorted(hashes))
 
@@ -154,8 +141,8 @@ def hash_file(file):
         return None
 
 
-def hash_files_parallel(files):
-    with concurrent.futures.ProcessPoolExecutor(max_workers=NUM_PROCESSES) as executor:
+def hash_files_parallel(files, num_processes=None):
+    with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes) as executor:
         for result in executor.map(hash_file, files):
             if result is not None:
                 yield result
@@ -184,13 +171,13 @@ def new_image_files(files, db):
             yield file
 
 
-def add(paths, db):
+def add(paths, db, num_processes=None):
     for path in paths:
         cprint("Hashing {}".format(path), "blue")
         files = get_image_files(path)
         files = new_image_files(files, db)
 
-        for result in hash_files_parallel(files):
+        for result in hash_files_parallel(files, num_processes):
             _add_to_database(*result, db=db)
 
         cprint("...done", "blue")
@@ -265,12 +252,12 @@ def delete_duplicates(duplicates, db):
                                         len(results)), 'yellow')
 
 
-def delete_picture(file_name, db):
-    cprint("Moving {} to {}".format(file_name, TRASH), 'yellow')
-    if not os.path.exists(TRASH):
-        os.makedirs(TRASH)
+def delete_picture(file_name, db, trash="./Trash/"):
+    cprint("Moving {} to {}".format(file_name, trash), 'yellow')
+    if not os.path.exists(trash):
+        os.makedirs(trash)
     try:
-        shutil.move(file_name, TRASH + os.path.basename(file_name))
+        shutil.move(file_name, trash + os.path.basename(file_name))
         remove_image(file_name, db)
     except FileNotFoundError:
         cprint("File not found {}".format(file_name), 'red')
@@ -282,7 +269,7 @@ def delete_picture(file_name, db):
     return True
 
 
-def display_duplicates(duplicates, db):
+def display_duplicates(duplicates, db, trash="./Trash/"):
     from werkzeug.routing import PathConverter
     class EverythingConverter(PathConverter):
         regex = '.*?'
@@ -310,8 +297,8 @@ def display_duplicates(duplicates, db):
         webbrowser.open("file://{}/{}".format(folder, '0.html'))
 
         @app.route('/picture/<everything:file_name>', methods=['DELETE'])
-        def delete_picture_(file_name):
-            return str(delete_picture(file_name, db))
+        def delete_picture_(file_name, trash=trash):
+            return str(delete_picture(file_name, db, trash))
 
         app.run()
 
@@ -345,16 +332,22 @@ if __name__ == '__main__':
 
     if args['--trash']:
         TRASH = args['--trash']
+    else:
+        TRASH = "./Trash/"
 
     if args['--db']:
         DB_PATH = args['--db']
+    else:
+        DB_PATH = "./db"
 
     if args['--parallel']:
         NUM_PROCESSES = int(args['--parallel'])
+    else:
+        NUM_PROCESSES = None
 
     with connect_to_db(db_conn_string=DB_PATH) as db:
         if args['add']:
-            add(args['<path>'], db)
+            add(args['<path>'], db, NUM_PROCESSES)
         elif args['remove']:
             remove(args['<path>'], db)
         elif args['clear']:
