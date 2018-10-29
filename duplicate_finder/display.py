@@ -49,7 +49,7 @@ def display_duplicates(duplicates, delete_cb, duplicates_per_page=10):
     @app.route('/picture/<everything:file_name>', methods=['DELETE'])
     def delete_picture(file_name):
         result = delete_cb(file_name)
-        return result
+        return str(result)
 
     webbrowser.open("http://localhost:5000")
     app.run()
