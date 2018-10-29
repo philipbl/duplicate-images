@@ -1,7 +1,9 @@
 import functools
+import json
 import os
 from pprint import pprint
 import shutil
+import sys
 
 import click
 import psutil
@@ -21,6 +23,15 @@ DBs = {'mongodb': MongoDB,
 DB_LOCATIONS = {'mongodb': 'mongodb://localhost:27017',
                 'sqlite': './db.sqlite',
                 'tinydb': './db.json'}
+
+def print_info(str):
+    cprint(str, "blue", file=sys.stderr)
+
+def print_warning(str):
+    cprint(str, "yellow", file=sys.stderr)
+
+def print_error(str):
+    cprint(str, "red", file=sys.stderr)
 
 
 
@@ -46,24 +57,25 @@ def add_paths(db, paths, parallel):
     def new_image_files(files):
         for file in files:
             if db.contains(file):
-                cprint("\tAlready hashed {}".format(file), "green")
+                print_info("\tAlready hashed {}".format(file))
             else:
                 yield file
 
     for path in paths:
-        cprint("Hashing {}".format(path), "blue")
+        print_info("Hashing {}".format(path))
+
         files = images.get_image_files(path)
         files = new_image_files(files)
 
         for file, result in images.hash_files(files, parallel):
             if result is None:
-                cprint("\tUnable to open {}".format(file), "red")
+                print_error("\tUnable to open {}".format(file))
                 continue
 
-            cprint("\tHashed {}".format(file), "blue")
+            print_info("\tHashed {}".format(file))
             db.insert(result)
 
-        cprint("...done", "blue")
+        print_info("...done")
 
 
 @cli.command(short_help="Removes all images information in the given path(s) from database.")
@@ -73,16 +85,16 @@ def remove_paths(db, paths):
     total = 0
 
     for path in paths:
-        cprint("Removing image files in database from {}".format(path), "blue")
+        print_info("Removing image files in database from {}".format(path))
         files = images.get_image_files(path)
 
         for file in files:
-            cprint("\tRemoving {}".format(file), "green")
+            print_info("\tRemoving {}".format(file))
             db.remove(file)
             total += 1
-        cprint("...done", "blue")
+        print_info("...done")
 
-    cprint("Images removed in database: {}".format(total), "blue")
+    print_info("Images removed in database: {}".format(total))
 
 
 @cli.command(short_help="Clears database.")
@@ -90,75 +102,92 @@ def remove_paths(db, paths):
 @click.pass_obj
 def clear_db(db):
     db.clear()
-    cprint("Database was cleared", "blue")
+    print_info("Database was cleared")
 
 
 @cli.command(short_help="Prints out all image information stored in database.")
 @click.pass_obj
 def show_db(db):
     pprint(db.all())
-    cprint("Total: {}".format(db.count()), "blue")
+    print_info("Total: {}".format(db.count()))
 
 
-@cli.command(short_help='Searches database for duplicate images.')
-@click.option('--print', 'print_duplicates', is_flag=True,
-              help='Only print duplicate files rather than displaying HTML '
-                   'file. This option takes priority over --delete.')
-@click.option('--delete', is_flag=True,
-              help='Move all found duplicate pictures to the trash.')
-@click.option('--match-time', is_flag=True,
-              help='Adds the extra constraint that duplicate images must have '
-                   'the same capture times in order to be considered.')
+@cli.command(name='display',
+             short_help='Display images in webpage.')
 @click.option('--trash', type=click.Path(),
               default='./Trash', show_default=True,
               help='Path to where files will be put when they are deleted.')
+@click.option('--match-time', is_flag=True,
+              help='Adds the extra constraint that duplicate images must have '
+                   'the same capture times in order to be considered.')
 @click.pass_obj
-def find(db, print_duplicates, delete, match_time, trash):
-
-    if delete and not click.confirm('Are you sure you want to delete all duplicate images?'):
-        click.echo("Aborted!")
-        return
-
-    cprint("Finding duplicates...", "blue")
+def display_(db, trash, match_time):
+    print_info("Finding duplicates...")
     duplicates = db.find_duplicates(match_time)
-    cprint("...done", "blue")
-
-    if print_duplicates:
-        pprint(duplicates)
-        cprint("Number of duplicates: {}".format(len(duplicates)), "blue")
-        return
-
-    trash = os.path.normpath(trash)
-    os.makedirs(trash, exist_ok=True)
-
-    if delete:
-        cprint("Deleting duplicates...", "blue")
-        results = []
-        for dup in duplicates:
-            for file_info in dup['items'][1:]:
-                results.append(delete_image(file_info['file_name'], db, trash))
-
-        cprint("\tDeleted {}/{} files".format(results.count(True), len(results)),
-               "yellow")
-        cprint("...done", "blue")
-        return
+    print_info("...done")
 
     # If no options were set, display duplicates
     delete_cb = functools.partial(delete_image, db=db, trash=trash)
     display.display_duplicates(duplicates, delete_cb)
 
 
+@cli.command(short_help='Automatically delete duplicate images.')
+@click.option('--trash', type=click.Path(),
+              default='./Trash', show_default=True,
+              help='Path to where files will be put when they are deleted.')
+@click.option('--match-time', is_flag=True,
+              help='Adds the extra constraint that duplicate images must have '
+                   'the same capture times in order to be considered.')
+@click.pass_obj
+def delete(db, trash, match_time):
+    if not click.confirm('Are you sure you want to delete all duplicate images?'):
+        click.echo("Aborted!")
+        return
+
+    print_info("Finding duplicates...")
+    duplicates = db.find_duplicates(match_time)
+    print_info("...done")
+
+    trash = os.path.normpath(trash)
+    os.makedirs(trash, exist_ok=True)
+
+    print_info("Deleting duplicates...")
+    results = []
+    for dup in duplicates:
+        for file_info in dup['items'][1:]:
+            results.append(delete_image(file_info['file_name'], db, trash))
+
+    print_info("\tDeleted {}/{} files".format(results.count(True),
+                                              len(results)))
+    print_info("...done")
+
+
+@cli.command(name='print',
+             short_help='Prints out all duplicate images found.')
+@click.option('--match-time', is_flag=True,
+              help='Adds the extra constraint that duplicate images must have '
+                   'the same capture times in order to be considered.')
+@click.pass_obj
+def print_(db, match_time):
+    print_info("Finding duplicates...")
+    duplicates = db.find_duplicates(match_time)
+    print_info("...done")
+
+    print(json.dumps(duplicates, indent=2))
+    print_info("Number of duplicates: {}".format(len(duplicates)))
+
+
 def delete_image(file_name, db, trash):
-    cprint("\tMoving {} to {}".format(file_name, trash), 'yellow')
+    print_warning("\tMoving {} to {}".format(file_name, trash))
 
     try:
         shutil.move(file_name, os.path.join(trash, os.path.basename(file_name)))
         db.remove(file_name)
     except FileNotFoundError:
-        cprint("\tFile not found {}".format(file_name), 'red')
+        print_error("\tFile not found {}".format(file_name))
         return False
     except Exception as e:
-        cprint("\tError: {}".format(str(e)), 'red')
+        print_error("\tError: {}".format(str(e)))
         return False
 
     return True
