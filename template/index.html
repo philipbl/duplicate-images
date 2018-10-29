@@ -1,17 +1,20 @@
 <html>
 <head>
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap-theme.min.css">
-    <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+    <style type="text/css">
+        .file-name {
+            word-break: break-all;
+            font-weight: 500;
+        }
+    </style>
 </head>
 
 {% macro image(img) -%}
 <div class="col">
+    <img class="img-fluid" src="picture/{{ img['file_name'] }}" alt="{{ img['file_name'] }}">
     <div class="thumbnail">
-        <img class="img-responsive" src="picture/{{ img['file_name'] }}" alt="{{ img['file_name'] }}">
         <div class="caption">
-            <h5 class="name">{{ img['file_name'] }}</h5>
+            <div class="file-name">{{ img['file_name'] }}</div>
             <div class="file-size">{{ img['file_size'] | filesizeformat }}</div>
             <div class="resolution">{{ img['image_size'] }}</div>
             <div class="capture-time">{{ img['capture_time'] }}</div>
@@ -24,21 +27,29 @@
 {%- endmacro %}
 
 {% macro pagination(current, total) -%}
-<nav>
+<nav aria-label="Page navigation">
     <div class="pages text-center">
         {{ current + 1 }} of {{ total }}
     </div>
-    <ul class="pager">
+    <ul class="pagination justify-content-center">
         {% if current == 0 %}
-        <li class="disabled"><span>Previous</span></li>
+        <li class="page-item disabled">
+            <a class="page-link" href="#">Previous</a>
+        </li>
         {% else %}
-        <li><a href="?current={{ current - 1 }}">Previous</a></li>
+        <li class="page-item">
+            <a class="page-link" href="?current={{ current - 1 }}">Previous</a>
+        </li>
         {% endif %}
 
         {% if current == (total - 1) %}
-        <li class="disabled"><span>Next</span></li>
+        <li class="page-item disabled">
+            <a class="page-link" href="#">Next</a>
+        </li>
         {% else %}
-        <li><a href="?current={{ current + 1 }}">Next</a></li>
+        <li class="page-item">
+            <a class="page-link" href="?current={{ current + 1 }}">Next</a>
+        </li>
         {% endif %}
     </ul>
 </nav>
@@ -63,6 +74,10 @@
         <button type="button" class="close" data-hide="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
         <strong>Error!</strong> File could not be found.
     </div>
+
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
 
     <script type="text/javascript">
         $(function(){
