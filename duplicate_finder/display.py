@@ -51,5 +51,5 @@ def display_duplicates(duplicates, delete_cb, duplicates_per_page=10):
         result = delete_cb(file_name)
         return result
 
-    # webbrowser.open("http://localhost:5000")
+    webbrowser.open("http://localhost:5000")
     app.run()
