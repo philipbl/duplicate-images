@@ -76,7 +76,7 @@ Usage:
     duplicate_finder.py remove <path> ... [--db=<db_path>]
     duplicate_finder.py clear [--db=<db_path>]
     duplicate_finder.py show [--db=<db_path>]
-    duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>]
+    duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>] [--threshold=<num>]
     duplicate_finder.py -h | --help
 
 Options:
@@ -88,6 +88,7 @@ Options:
                                files (default: number of CPUs).
 
     find:
+        --threshold=<num>     Image matching threshold. Number of different bits in Hamming distance. False positives are possible.
         --print               Only print duplicate files rather than displaying HTML file
         --delete              Move all found duplicate pictures to the trash. This option takes priority over --print.
         --match-time          Adds the extra constraint that duplicate images must have the
@@ -125,7 +126,7 @@ Prints the contents database.
 
 ### Find
 ```bash
-duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>]
+duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--threshold=<num>]
 ```
 
 Finds duplicate pictures that have been hashed. This will find images that have the same hash stored in the database. There are a few options associated with `find`. By default, when this command is run, a webpage is displayed showing duplicate pictures and a server is started that allows for the pictures to be deleted (images are not actually deleted, but moved to a trash folder -- I really don't want you to make a mistake). The first option, **`--print`**, prints all duplicate pictures and does not display a webpage or start the server. **`--delete`** automatically moves all duplicate images found to the trash. Be careful with this one. **`--match-time`** adds the extra constraint that images must have the same EXIF time stamp to be considered duplicate pictures. Last, `--trash=<trash_path>` lets you select a path to where you want files to be put when they are deleted. The default trash location is `./Trash`.

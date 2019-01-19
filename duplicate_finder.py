@@ -7,7 +7,7 @@ Usage:
     duplicate_finder.py remove <path> ... [--db=<db_path>]
     duplicate_finder.py clear [--db=<db_path>]
     duplicate_finder.py show [--db=<db_path>]
-    duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>]
+    duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>] [--threshold=<num>] 
     duplicate_finder.py -h | --help
 
 Options:
@@ -19,6 +19,7 @@ Options:
                                files (default: number of CPUs).
 
     find:
+        --threshold=<num>     Image matching threshold. Number of different bits in Hamming distance. False positives are possible.
         --print               Only print duplicate files rather than displaying HTML file
         --delete              Move all found duplicate pictures to the trash. This option takes priority over --print.
         --match-time          Adds the extra constraint that duplicate images must have the
@@ -45,7 +46,7 @@ from more_itertools import chunked
 from PIL import Image, ExifTags
 import pymongo
 from termcolor import cprint
-
+import pybktree
 
 @contextmanager
 def connect_to_db(db_conn_string='./db'):
@@ -244,6 +245,51 @@ def find(db, match_time=False):
 
     return list(dups)
 
+def find_threshold(db, threshold=1):
+    dups = []
+    # Build a tree
+    cursor = db.find()
+    tree = pybktree.BKTree(pybktree.hamming_distance)
+
+    cprint('Finding fuzzy duplicates, it might take a while...')
+    cnt = 0
+    for document in db.find():
+        int_hash = int(document['hash'], 16)
+        tree.add(int_hash)
+        cnt = cnt + 1
+
+    deduplicated = set()
+
+    scanned = 0
+    for document in db.find():
+        cprint("\r%d%%" % (scanned * 100 / (cnt - 1)), end='')
+        scanned = scanned + 1
+        if document['hash'] in deduplicated:
+            continue
+        deduplicated.add(document['hash'])
+        hash_len = len(document['hash'])
+        int_hash = int(document['hash'], 16)
+        similar = tree.find(int_hash, threshold)
+        similar = list(set(similar))
+        if len(similar) > 1:
+           similars = []
+           for (distance, item_hash) in similar:
+               #if distance > 0:
+                   item_hash = format(item_hash, '0' + str(hash_len) + 'x')
+                   deduplicated.add(item_hash)
+                   for item in db.find({'hash': item_hash}):
+                       item['file_name'] = item['_id']
+                       similars.append(item)
+           if len(similars) > 0:
+               dups.append(
+                   {
+                      '_id': document['hash'],
+                      'total': len(similars),
+                      'items': similars
+                   }
+               )
+
+    return dups
 
 def delete_duplicates(duplicates, db):
     results = [delete_picture(x['file_name'], db)
@@ -355,7 +401,10 @@ if __name__ == '__main__':
         elif args['show']:
             show(db)
         elif args['find']:
-            dups = find(db, args['--match-time'])
+            if args['--threshold'] is not None:
+                dups = find_threshold(db, int(args['--threshold']))
+            else:
+                dups = find(db, args['--match-time'])
 
             if args['--delete']:
                 delete_duplicates(dups, db)

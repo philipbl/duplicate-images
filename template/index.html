@@ -1,5 +1,6 @@
 <html>
 <head>
+    <meta charset="UTF-8">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap-theme.min.css">
     <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
@@ -9,7 +10,9 @@
 {% macro image(img, size) -%}
 <div class="col-xs-{{ size }}">
     <div class="thumbnail">
-        <img class="img-responsive" src="{{ img['file_name'] }}" alt="{{ img['file_name'] }}">
+        <a href="{{ img['file_name']  }}" target='_blank'>
+            <img class="img-responsive" src="{{ img['file_name'] }}" alt="{{ img['file_name'] }}">
+        </a>
         <div class="caption">
             <h5 class="name">{{ img['file_name'] }}</h5>
             <div class="file-size">{{ img['file_size'] | filesizeformat }}</div>

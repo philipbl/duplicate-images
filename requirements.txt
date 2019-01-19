@@ -10,3 +10,4 @@ termcolor==1.1.0
 Werkzeug==0.14.1
 Flask-Cors==3.0.3
 dnspython>=1.15.0
+pybktree==1.1
