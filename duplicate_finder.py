@@ -114,6 +114,9 @@ def get_image_files(path):
             if is_image(file):
                 yield file
 
+def get_files_count(path):
+    cpt = sum([len(files) for r, d, files in os.walk(path)])
+    return cpt
 
 def hash_file(file):
     try:
@@ -140,6 +143,10 @@ def hash_file(file):
         cprint("\tUnable to open {}".format(file), "red")
         return None
 
+def hash_files(files):
+    for result in map(hash_file, files):
+            if result is not None:
+                yield result
 
 def hash_files_parallel(files, num_processes=None):
     with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes) as executor:
@@ -150,11 +157,12 @@ def hash_files_parallel(files, num_processes=None):
 
 def _add_to_database(file_, hash_, file_size, image_size, capture_time, db):
     try:
-        db.insert_one({"_id": file_,
+        inserted = db.insert_one({"_id": file_,
                        "hash": hash_,
                        "file_size": file_size,
                        "image_size": image_size,
                        "capture_time": capture_time})
+        cprint("\tInserted key: {}".format(inserted.inserted_id), "blue")
     except pymongo.errors.DuplicateKeyError:
         cprint("Duplicate key: {}".format(file_), "red")
 
@@ -174,11 +182,18 @@ def new_image_files(files, db):
 def add(paths, db, num_processes=None):
     for path in paths:
         cprint("Hashing {}".format(path), "blue")
+        files_count = get_files_count(path)
+        cprint("Total files {}".format(files_count), "blue")
+
         files = get_image_files(path)
         files = new_image_files(files, db)
 
-        for result in hash_files_parallel(files, num_processes):
-            _add_to_database(*result, db=db)
+        if num_processes == 1:
+            for result in hash_files(files):
+                _add_to_database(*result, db=db)
+        else:
+            for result in hash_files_parallel(files, num_processes):
+                _add_to_database(*result, db=db)
 
         cprint("...done", "blue")
 
