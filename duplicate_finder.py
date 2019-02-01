@@ -8,6 +8,7 @@ Usage:
     duplicate_finder.py clear [--db=<db_path>]
     duplicate_finder.py show [--db=<db_path>]
     duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>]
+    duplicate_finder.py watch <path> ... [--db=<db_path>]
     duplicate_finder.py -h | --help
 
 Options:
@@ -31,6 +32,8 @@ from contextlib import contextmanager
 import os
 import magic
 import math
+import time
+
 from pprint import pprint
 import shutil
 from subprocess import Popen, PIPE, TimeoutExpired
@@ -45,6 +48,9 @@ from more_itertools import chunked
 from PIL import Image, ExifTags
 import pymongo
 from termcolor import cprint
+
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 
 @contextmanager
@@ -89,15 +95,7 @@ def connect_to_db(db_conn_string='./db'):
         p.terminate()
 
 
-def get_image_files(path):
-    """
-    Check path recursively for files. If any compatible file is found, it is
-    yielded with its full path.
-
-    :param path:
-    :return: yield absolute path
-    """
-    def is_image(file_name):
+def is_image(file_name):
         # List mime types fully supported by Pillow
         full_supported_formats = ['gif', 'jp2', 'jpeg', 'pcx', 'png', 'tiff', 'x-ms-bmp',
                                   'x-portable-pixmap', 'x-xbitmap']
@@ -111,6 +109,15 @@ def get_image_files(path):
             cprint("Continuing execution...", 'red')
             return False
 
+
+def get_image_files(path):
+    """
+    Check path recursively for files. If any compatible file is found, it is
+    yielded with its full path.
+
+    :param path:
+    :return: yield absolute path
+    """
     path = os.path.abspath(path)
     for root, dirs, files in os.walk(path):
         for file in files:
@@ -200,6 +207,51 @@ def add(paths, db, num_processes=None):
                 _add_to_database(*result, db=db)
 
         cprint("...done", "blue")
+
+
+def addOne(file, db):
+    if is_image(file):
+        if _in_database(file, db):
+            cprint("\tAlready hashed {}".format(file), "green")
+        else:
+            result = hash_file(file)
+            _add_to_database(*result, db=db)
+    else:
+        cprint("\tUnrecognized file format", "red")
+
+
+class WatcherEventHandler(FileSystemEventHandler):
+    def __init__(self, db):
+        super(WatcherEventHandler, self).__init__()
+        self._db = db
+
+    def on_modified(self, event):
+        """Called when a file or directory is modified.
+        :param event:
+            Event representing file/directory modification.
+        :type event:
+            :class:`DirModifiedEvent` or :class:`FileModifiedEvent`
+        """
+        what = 'directory' if event.is_directory else 'file'
+        if what=='file':
+            cprint("Modified {}".format(event.src_path), "blue")
+            file = event.src_path
+            db = self._db
+            addOne(file, db)
+        
+
+def watch(paths, db):
+    path = paths[0]
+    event_handler = WatcherEventHandler(db=db)
+    observer = Observer()
+    observer.schedule(event_handler, path, recursive=True)
+    observer.start()
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
 
 
 def remove(paths, db):
@@ -383,3 +435,5 @@ if __name__ == '__main__':
                 print("Number of duplicates: {}".format(len(dups)))
             else:
                 display_duplicates(dups, db=db)
+        elif args['watch']:
+            watch(args['<path>'], db)
