@@ -106,6 +106,10 @@ def get_image_files(path):
             return mime.rsplit('/', 1)[1] in full_supported_formats
         except IndexError:
             return False
+        except Exception as e:
+            cprint("Error getting mime type: {}".format(str(e)), 'red')
+            cprint("Continuing execution...", 'red')
+            return False
 
     path = os.path.abspath(path)
     for root, dirs, files in os.walk(path):
