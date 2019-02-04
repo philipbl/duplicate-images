@@ -317,8 +317,8 @@ def find(db, match_time=False):
     return list(dups)
 
 
-def delete_duplicates(duplicates, db, filter_largest):
-    results = [delete_picture(x['file_name'], db)
+def delete_duplicates(duplicates, db, trash, filter_largest):
+    results = [delete_picture(x['file_name'], db, trash=trash)
                for dup in duplicates for x in filter_duplicates(dup['items'], filter_largest)]
     cprint("Deleted {}/{} files".format(results.count(True),
                                         len(results)), 'yellow')
@@ -443,7 +443,7 @@ if __name__ == '__main__':
             dups = find(db, args['--match-time'])
 
             if args['--delete']:
-                delete_duplicates(dups, db, FILTER_LARGEST)
+                delete_duplicates(dups, db, TRASH, FILTER_LARGEST)
             elif args['--print']:
                 pprint(dups)
                 print("Number of duplicates: {}".format(len(dups)))
