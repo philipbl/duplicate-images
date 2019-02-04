@@ -7,7 +7,7 @@ Usage:
     duplicate_finder.py remove <path> ... [--db=<db_path>]
     duplicate_finder.py clear [--db=<db_path>]
     duplicate_finder.py show [--db=<db_path>]
-    duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>]
+    duplicate_finder.py find [--print] [--delete] [--match-time] [--filter-largest] [--trash=<trash_path>] [--db=<db_path>]
     duplicate_finder.py watch <path> ... [--db=<db_path>]
     duplicate_finder.py -h | --help
 
@@ -25,6 +25,7 @@ Options:
         --match-time          Adds the extra constraint that duplicate images must have the
                               same capture times in order to be considered.
         --trash=<trash_path>  Where files will be put when they are deleted (default: ./Trash)
+        --filter-largest      Sort by file size when deleting.  
 """
 
 import concurrent.futures
@@ -316,11 +317,19 @@ def find(db, match_time=False):
     return list(dups)
 
 
-def delete_duplicates(duplicates, db):
+def delete_duplicates(duplicates, db, filter_largest):
     results = [delete_picture(x['file_name'], db)
-               for dup in duplicates for x in dup['items'][1:]]
+               for dup in duplicates for x in filter_duplicates(dup['items'], filter_largest)]
     cprint("Deleted {}/{} files".format(results.count(True),
                                         len(results)), 'yellow')
+
+
+def filter_duplicates(entities, filter_largest):
+    result = entities
+    if filter_largest:
+        result.sort(key=lambda x: x['file_size'], reverse=True)
+        result = result[1:]
+    return result
 
 
 def delete_picture(file_name, db, trash="./Trash/"):
@@ -411,6 +420,11 @@ if __name__ == '__main__':
     else:
         DB_PATH = "./db"
 
+    if args['--filter-largest']:
+        FILTER_LARGEST = True
+    else:
+        FILTER_LARGEST = False
+
     if args['--parallel']:
         NUM_PROCESSES = int(args['--parallel'])
     else:
@@ -429,7 +443,7 @@ if __name__ == '__main__':
             dups = find(db, args['--match-time'])
 
             if args['--delete']:
-                delete_duplicates(dups, db)
+                delete_duplicates(dups, db, FILTER_LARGEST)
             elif args['--print']:
                 pprint(dups)
                 print("Number of duplicates: {}".format(len(dups)))
