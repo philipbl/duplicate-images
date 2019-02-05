@@ -326,9 +326,11 @@ def delete_duplicates(duplicates, db, trash, filter_largest):
 
 def filter_duplicates(entities, filter_largest):
     result = entities
+    
     if filter_largest:
         result.sort(key=lambda x: x['file_size'], reverse=True)
-        result = result[1:]
+
+    result = result[1:]
     return result
 
 
