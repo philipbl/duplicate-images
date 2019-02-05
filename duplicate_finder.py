@@ -317,7 +317,7 @@ def find(db, match_time=False):
     return list(dups)
 
 
-def delete_duplicates(duplicates, db, trash, filter_largest):
+def delete_duplicates(duplicates, db, trash="./Trash/", filter_largest=False):
     results = [delete_picture(x['file_name'], db, trash=trash)
                for dup in duplicates for x in filter_duplicates(dup['items'], filter_largest)]
     cprint("Deleted {}/{} files".format(results.count(True),
@@ -326,7 +326,7 @@ def delete_duplicates(duplicates, db, trash, filter_largest):
 
 def filter_duplicates(entities, filter_largest):
     result = entities
-    
+
     if filter_largest:
         result.sort(key=lambda x: x['file_size'], reverse=True)
 
