@@ -77,6 +77,7 @@ Usage:
     duplicate_finder.py clear [--db=<db_path>]
     duplicate_finder.py show [--db=<db_path>]
     duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>]
+    duplicate_finder.py watch <path> ... [--db=<db_path>]
     duplicate_finder.py -h | --help
 
 Options:
@@ -101,6 +102,13 @@ python duplicate_finder.py add /path/to/images
 ```
 
 When a path is added, image files are recursively searched for. In particular, `JPEG`, `PNG`, `GIF`, and `TIFF` images are searched for. Any image files found will be hashed. Adding a path uses 8 processes (by default) to hash images in parallel so the CPU usage is very high.
+
+### Watch
+```bash
+python duplicate_finder.py watch /path/to/images
+```
+
+Starts watching the first path argument given. When a file modification occurs recursively in this path, the modified file will be added as if ```add``` command was chosen. Useful when you are sorting your library and adding new images to it. Removing is not supported yet.
 
 ### Remove
 ```bash

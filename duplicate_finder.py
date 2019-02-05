@@ -7,7 +7,8 @@ Usage:
     duplicate_finder.py remove <path> ... [--db=<db_path>]
     duplicate_finder.py clear [--db=<db_path>]
     duplicate_finder.py show [--db=<db_path>]
-    duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>]
+    duplicate_finder.py find [--print] [--delete] [--match-time] [--filter-largest] [--trash=<trash_path>] [--db=<db_path>]
+    duplicate_finder.py watch <path> ... [--db=<db_path>]
     duplicate_finder.py -h | --help
 
 Options:
@@ -24,6 +25,7 @@ Options:
         --match-time          Adds the extra constraint that duplicate images must have the
                               same capture times in order to be considered.
         --trash=<trash_path>  Where files will be put when they are deleted (default: ./Trash)
+        --filter-largest      Sort by file size when deleting.  
 """
 
 import concurrent.futures
@@ -31,6 +33,8 @@ from contextlib import contextmanager
 import os
 import magic
 import math
+import time
+
 from pprint import pprint
 import shutil
 from subprocess import Popen, PIPE, TimeoutExpired
@@ -45,6 +49,9 @@ from more_itertools import chunked
 from PIL import Image, ExifTags
 import pymongo
 from termcolor import cprint
+
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 
 @contextmanager
@@ -89,15 +96,7 @@ def connect_to_db(db_conn_string='./db'):
         p.terminate()
 
 
-def get_image_files(path):
-    """
-    Check path recursively for files. If any compatible file is found, it is
-    yielded with its full path.
-
-    :param path:
-    :return: yield absolute path
-    """
-    def is_image(file_name):
+def is_image(file_name):
         # List mime types fully supported by Pillow
         full_supported_formats = ['gif', 'jp2', 'jpeg', 'pcx', 'png', 'tiff', 'x-ms-bmp',
                                   'x-portable-pixmap', 'x-xbitmap']
@@ -106,7 +105,20 @@ def get_image_files(path):
             return mime.rsplit('/', 1)[1] in full_supported_formats
         except IndexError:
             return False
+        except Exception as e:
+            cprint("Error getting mime type: {}".format(str(e)), 'red')
+            cprint("Continuing execution...", 'red')
+            return False
 
+
+def get_image_files(path):
+    """
+    Check path recursively for files. If any compatible file is found, it is
+    yielded with its full path.
+
+    :param path:
+    :return: yield absolute path
+    """
     path = os.path.abspath(path)
     for root, dirs, files in os.walk(path):
         for file in files:
@@ -114,6 +126,9 @@ def get_image_files(path):
             if is_image(file):
                 yield file
 
+def get_files_count(path):
+    cpt = sum([len(files) for r, d, files in os.walk(path)])
+    return cpt
 
 def hash_file(file):
     try:
@@ -140,6 +155,10 @@ def hash_file(file):
         cprint("\tUnable to open {}".format(file), "red")
         return None
 
+def hash_files(files):
+    for result in map(hash_file, files):
+            if result is not None:
+                yield result
 
 def hash_files_parallel(files, num_processes=None):
     with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes) as executor:
@@ -150,11 +169,12 @@ def hash_files_parallel(files, num_processes=None):
 
 def _add_to_database(file_, hash_, file_size, image_size, capture_time, db):
     try:
-        db.insert_one({"_id": file_,
+        inserted = db.insert_one({"_id": file_,
                        "hash": hash_,
                        "file_size": file_size,
                        "image_size": image_size,
                        "capture_time": capture_time})
+        cprint("\tInserted key: {}".format(inserted.inserted_id), "blue")
     except pymongo.errors.DuplicateKeyError:
         cprint("Duplicate key: {}".format(file_), "red")
 
@@ -174,13 +194,65 @@ def new_image_files(files, db):
 def add(paths, db, num_processes=None):
     for path in paths:
         cprint("Hashing {}".format(path), "blue")
+        files_count = get_files_count(path)
+        cprint("Total files {}".format(files_count), "blue")
+
         files = get_image_files(path)
         files = new_image_files(files, db)
 
-        for result in hash_files_parallel(files, num_processes):
-            _add_to_database(*result, db=db)
+        if num_processes == 1:
+            for result in hash_files(files):
+                _add_to_database(*result, db=db)
+        else:
+            for result in hash_files_parallel(files, num_processes):
+                _add_to_database(*result, db=db)
 
         cprint("...done", "blue")
+
+
+def addOne(file, db):
+    if is_image(file):
+        if _in_database(file, db):
+            cprint("\tAlready hashed {}".format(file), "green")
+        else:
+            result = hash_file(file)
+            _add_to_database(*result, db=db)
+    else:
+        cprint("\tUnrecognized file format", "red")
+
+
+class WatcherEventHandler(FileSystemEventHandler):
+    def __init__(self, db):
+        super(WatcherEventHandler, self).__init__()
+        self._db = db
+
+    def on_modified(self, event):
+        """Called when a file or directory is modified.
+        :param event:
+            Event representing file/directory modification.
+        :type event:
+            :class:`DirModifiedEvent` or :class:`FileModifiedEvent`
+        """
+        what = 'directory' if event.is_directory else 'file'
+        if what=='file':
+            cprint("Modified {}".format(event.src_path), "blue")
+            file = event.src_path
+            db = self._db
+            addOne(file, db)
+        
+
+def watch(paths, db):
+    path = paths[0]
+    event_handler = WatcherEventHandler(db=db)
+    observer = Observer()
+    observer.schedule(event_handler, path, recursive=True)
+    observer.start()
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
 
 
 def remove(paths, db):
@@ -245,11 +317,21 @@ def find(db, match_time=False):
     return list(dups)
 
 
-def delete_duplicates(duplicates, db):
-    results = [delete_picture(x['file_name'], db)
-               for dup in duplicates for x in dup['items'][1:]]
+def delete_duplicates(duplicates, db, trash="./Trash/", filter_largest=False):
+    results = [delete_picture(x['file_name'], db, trash=trash)
+               for dup in duplicates for x in filter_duplicates(dup['items'], filter_largest)]
     cprint("Deleted {}/{} files".format(results.count(True),
                                         len(results)), 'yellow')
+
+
+def filter_duplicates(entities, filter_largest):
+    result = entities
+
+    if filter_largest:
+        result.sort(key=lambda x: x['file_size'], reverse=True)
+
+    result = result[1:]
+    return result
 
 
 def delete_picture(file_name, db, trash="./Trash/"):
@@ -340,6 +422,11 @@ if __name__ == '__main__':
     else:
         DB_PATH = "./db"
 
+    if args['--filter-largest']:
+        FILTER_LARGEST = True
+    else:
+        FILTER_LARGEST = False
+
     if args['--parallel']:
         NUM_PROCESSES = int(args['--parallel'])
     else:
@@ -358,9 +445,11 @@ if __name__ == '__main__':
             dups = find(db, args['--match-time'])
 
             if args['--delete']:
-                delete_duplicates(dups, db)
+                delete_duplicates(dups, db, TRASH, FILTER_LARGEST)
             elif args['--print']:
                 pprint(dups)
                 print("Number of duplicates: {}".format(len(dups)))
             else:
                 display_duplicates(dups, db=db)
+        elif args['watch']:
+            watch(args['<path>'], db)
