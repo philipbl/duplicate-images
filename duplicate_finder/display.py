@@ -17,6 +17,7 @@ app.url_map.converters['everything'] = EverythingConverter
 
 
 def display_duplicates(duplicates, delete_cb, duplicates_per_page=10):
+
     @app.route('/')
     def main_page():
         env = Environment(loader=FileSystemLoader('template'))
@@ -48,7 +49,30 @@ def display_duplicates(duplicates, delete_cb, duplicates_per_page=10):
 
     @app.route('/picture/<everything:file_name>', methods=['DELETE'])
     def delete_picture(file_name):
+        # Remove picture from database and file system
         result = delete_cb(file_name)
+
+        if result:
+            # TODO: Make this more efficient
+            # If successful, remove from data structure
+            i_to_delete = -1
+            j_to_delete = -1
+            for i, images in enumerate(duplicates):
+                for j, image in enumerate(images['items']):
+                    print(i, j, image)
+                    if file_name == image['file_name']:
+                        i_to_delete = i
+                        j_to_delete = j
+                        break
+
+            if i_to_delete != -1:
+                print("Removing item", i_to_delete, j_to_delete)
+                del duplicates[i_to_delete]['items'][j_to_delete]
+
+                # If there are no more duplicates, then remove the whole entry
+                if len(duplicates[i_to_delete]['items']) == 1:
+                    del duplicates[i_to_delete]
+
         return str(result)
 
     webbrowser.open("http://localhost:5000")

@@ -11,8 +11,8 @@
 
 {% macro image(img) -%}
 <div class="col">
-    <img class="img-fluid" src="picture/{{ img['file_name'] }}" alt="{{ img['file_name'] }}">
     <div class="thumbnail">
+        <img class="img-fluid" src="picture/{{ img['file_name'] }}" alt="{{ img['file_name'] }}">
         <div class="caption">
             <div class="file-name">{{ img['file_name'] }}</div>
             <div class="file-size">{{ img['file_size'] | filesizeformat }}</div>
@@ -98,6 +98,7 @@
 
                     if(data == "True") {
                         parent.addClass('fade');
+                        document.location.reload();
                     }
                     else {
                         $('#file-not-found-alert').show();

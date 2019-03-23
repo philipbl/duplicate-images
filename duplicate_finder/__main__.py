@@ -180,11 +180,14 @@ def print_(db, match_time):
 def delete_image(file_name, db, trash):
     print_warning("\tMoving {} to {}".format(file_name, trash))
 
+    os.makedirs(trash, exist_ok=True)
+
     try:
+        print(os.path.join(trash, os.path.basename(file_name)))
         shutil.move(file_name, os.path.join(trash, os.path.basename(file_name)))
         db.remove(file_name)
-    except FileNotFoundError:
-        print_error("\tFile not found {}".format(file_name))
+    except FileNotFoundError as e:
+        print_error(f"\t{e}")
         return False
     except Exception as e:
         print_error("\tError: {}".format(str(e)))
