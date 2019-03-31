@@ -6,42 +6,54 @@ import pyfakefs.fake_filesystem as fake_fs
 import pytest
 
 import duplicate_finder
+from duplicate_finder import images, display, database
+from duplicate_finder.database import mongodb, sqlite, tinydb
+
+
+@pytest.fixture
+def db():
+    from duplicate_finder.database import sqlite
+    path = 'tests/db.sqlite'
+    db = sqlite.SQLite(path)
+
+    yield db
+
+    os.remove(path)
 
 
 def test_get_image_files():
     images = ['tests/images/u.jpg', 'tests/images/file.png', 'tests/images/file.gif', 'tests/images/file.tiff',
               'tests/images/image.txt', 'tests/images/deeply/nested/different.jpg',
               'tests/images/deeply/nested/image/sideways.jpg', 'tests/images/deeply/nested/image/smaller.jpg']
-    other = ['tests/images/not_image.txt', 'tests/images/not_image.jpb', 'README.md']
 
-    assert sorted([str(x).rsplit('/', 1)[1] for x in duplicate_finder.get_image_files('.')]) == \
-           sorted([str(x).rsplit('/', 1)[1] for x in images])
+    assert sorted(duplicate_finder.images.get_image_files('./tests')) == \
+           sorted([os.path.abspath(x) for x in images])
 
 
 def test_hash_file():
     image_name = 'tests/images/u.jpg'
-    result = duplicate_finder.hash_file(image_name)
-    assert result is not None
-    file, hash_, file_size, image_size, capture_time = result
+    result = duplicate_finder.images.hash_file(image_name)
+    assert result[1] is not None
+    file_name, metadata = result
 
-    assert file == image_name
-    assert hash_ == '4b9e705db4450db6695cba149e2b2d65c3a950e13c7e8778e1cbda081e12a7eb'
+    assert file_name == metadata['file_name'] == image_name
+    assert metadata['hash'] == '4b9e705db4450db6695cba149e2b2d65c3a950e13c7e8778e1cbda081e12a7eb'
 
-    result = duplicate_finder.hash_file('tests/images/nothing.png')
-    assert result is None
+    result = duplicate_finder.images.hash_file('tests/images/nothing.png')
+    assert result[1] is None
 
-    result = duplicate_finder.hash_file('tests/images/not_image.txt')
-    assert result is None
+    result = duplicate_finder.images.hash_file('tests/images/not_image.txt')
+    assert result[1] is None
 
 
 def test_hash_file_rotated():
     image_name_1 = 'tests/images/u.jpg'
     image_name_2 = 'tests/images/deeply/nested/image/sideways.jpg'
 
-    result_1 = duplicate_finder.hash_file(image_name_1)
-    result_2 = duplicate_finder.hash_file(image_name_2)
+    result_1 = duplicate_finder.images.hash_file(image_name_1)
+    result_2 = duplicate_finder.images.hash_file(image_name_2)
 
-    assert result_1[1] == result_2[1]
+    assert result_1[1]['hash'] == result_2[1]['hash']
 
 
 def test_hash_files_parallel():
@@ -51,50 +63,54 @@ def test_hash_files_parallel():
              'tests/images/deeply/nested/different.jpg',
              'tests/images/deeply/nested/image/sideways.jpg',
              'tests/images/deeply/nested/image/smaller.jpg']
-    results = duplicate_finder.hash_files_parallel(files)
+    results = duplicate_finder.images.hash_files(files, processes=4)
+
     results = list(results)
-    assert len(results) == 4
+    assert len(results) == len(files)
+    assert len([r for r in results if r[1] is not None]) == 4
 
-    file, hash_, file_size, image_size, capture_time = results[0]
+    file, metadata = results[0]
     assert file == 'tests/images/u.jpg'
-    assert hash_ == '4b9e705db4450db6695cba149e2b2d65c3a950e13c7e8778e1cbda081e12a7eb'
+    assert metadata['hash'] == '4b9e705db4450db6695cba149e2b2d65c3a950e13c7e8778e1cbda081e12a7eb'
 
-
-    duplicate_finder.NUM_PROCESSES = 1
-    results_1_process = duplicate_finder.hash_files_parallel(files)
+    results_1_process = duplicate_finder.images.hash_files(files, 1)
     results_1_process = list(results_1_process)
     assert results_1_process == results
 
 
-def test_add_to_database():
-    db = mongomock.MongoClient().image_database.images
-    result = duplicate_finder.hash_file('tests/images/u.jpg')
-    duplicate_finder._add_to_database(*result, db=db)
+def test_add_to_database(db):
+    file_name = 'tests/images/u.jpg'
 
-    db_result = db.find_one({'_id' : result[0]})
+    _, result = duplicate_finder.images.hash_file(file_name)
+    db.insert(result)
 
-    assert result[0] == db_result['_id']
-    assert result[1] == db_result['hash']
-    assert result[2] == db_result['file_size']
-    assert result[3] == db_result['image_size']
-    assert result[4] == db_result['capture_time']
+    db_results = db.all()
+    assert len(db_results) == 1
+    db_result = db_results[0]
 
-    # Duplicate entry should print out an error
-    duplicate_finder._add_to_database(*result, db=db)
+    assert db_result == result
 
-
-def test_in_database():
-    db = mongomock.MongoClient().image_database.images
-    result = duplicate_finder.hash_file('tests/images/u.jpg')
-    duplicate_finder._add_to_database(*result, db=db)
-
-    assert duplicate_finder._in_database('tests/images/u.jpg', db)
+    # Duplicate entry should return an error
+    with pytest.raises(Exception):
+        db.insert(result)
 
 
-def test_new_image_files():
-    db = mongomock.MongoClient().image_database.images
-    result = duplicate_finder.hash_file('tests/images/u.jpg')
-    duplicate_finder._add_to_database(*result, db=db)
+def test_in_database(db):
+    file_name = 'tests/images/u.jpg'
+
+    _, result = duplicate_finder.images.hash_file(file_name)
+    db.insert(result)
+
+    assert db.contains(file_name)
+
+
+def test_new_image_files(db):
+    file_name = 'tests/images/u.jpg'
+
+    _, result = duplicate_finder.images.hash_file(file_name)
+    db.insert(result)
+
+    # TODO: Finish this function. I am not sure what new_image_files is doing
 
     results = duplicate_finder.new_image_files(['tests/images/u.jpg', 'another_file'], db)
     results = list(results)
