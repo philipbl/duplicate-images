@@ -10,9 +10,15 @@
 {% macro image(img, size) -%}
 <div class="col-xs-{{ size }}">
     <div class="thumbnail">
-        <a href="{{ img['file_name']  }}" target='_blank'>
-            <img class="img-responsive" src="{{ img['file_name'] }}" alt="{{ img['file_name'] }}">
-        </a>
+        {% if '.heic' in img['file_name'] | lower %}
+            <a href="http://127.0.0.1:5000/heic-transform/{{ img['file_name'] }}" target='_blank'>
+                <img class="img-responsive" src="http://127.0.0.1:5000/heic-transform/{{ img['file_name'] }}" alt="{{ img['file_name'] }}">
+            </a>
+        {% else %}
+            <a href="{{ img['file_name']  }}" target='_blank'>
+                <img class="img-responsive" src="{{ img['file_name'] }}" alt="{{ img['file_name'] }}">
+            </a>
+        {% endif %}
         <div class="caption">
             <h5 class="name">{{ img['file_name'] }}</h5>
             <div class="file-size">{{ img['file_size'] | filesizeformat }}</div>

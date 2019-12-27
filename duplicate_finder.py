@@ -38,7 +38,7 @@ from subprocess import Popen, PIPE, TimeoutExpired
 from tempfile import TemporaryDirectory
 import webbrowser
 
-from flask import Flask
+from flask import Flask, Response
 from flask_cors import CORS
 import imagehash
 from jinja2 import FileSystemLoader, Environment
@@ -47,6 +47,7 @@ from PIL import Image, ExifTags
 import pymongo
 from termcolor import cprint
 import pybktree
+import pyheif
 
 @contextmanager
 def connect_to_db(db_conn_string='./db'):
@@ -101,7 +102,7 @@ def get_image_files(path):
     def is_image(file_name):
         # List mime types fully supported by Pillow
         full_supported_formats = ['gif', 'jp2', 'jpeg', 'pcx', 'png', 'tiff', 'x-ms-bmp',
-                                  'x-portable-pixmap', 'x-xbitmap']
+                                  'x-portable-pixmap', 'x-xbitmap', 'heic']
         try:
             mime = magic.from_file(file_name, mime=True)
             return mime.rsplit('/', 1)[1] in full_supported_formats
@@ -115,25 +116,35 @@ def get_image_files(path):
             if is_image(file):
                 yield file
 
+def hash_image(img):
+    image_size = get_image_size(img)
+    capture_time = get_capture_time(img)
+
+    hashes = []
+    # hash the image 4 times and rotate it by 90 degrees each time
+    for angle in [ 0, 90, 180, 270 ]:
+        if angle > 0:
+            turned_img = img.rotate(angle, expand=True)
+        else:
+            turned_img = img
+        hashes.append(str(imagehash.phash(turned_img)))
+
+    hashes = ''.join(sorted(hashes))
+    return hashes, image_size, capture_time
 
 def hash_file(file):
     try:
-        hashes = []
-        img = Image.open(file)
+        mime = magic.from_file(file, mime=True)
+        if mime.rsplit('/', 1)[1] == 'heic':
+            heif = pyheif.read_heif(open(file, 'rb'))
+            img = Image.frombytes(
+                mode=heif.mode, size=heif.size, data=heif.data)
+        else:
+            img = Image.open(file)
 
         file_size = get_file_size(file)
-        image_size = get_image_size(img)
-        capture_time = get_capture_time(img)
 
-        # hash the image 4 times and rotate it by 90 degrees each time
-        for angle in [ 0, 90, 180, 270 ]:
-            if angle > 0:
-                turned_img = img.rotate(angle, expand=True)
-            else:
-                turned_img = img
-            hashes.append(str(imagehash.phash(turned_img)))
-
-        hashes = ''.join(sorted(hashes))
+        hashes, image_size, capture_time = hash_image(img)
 
         cprint("\tHashed {}".format(file), "blue")
         return file, hashes, file_size, image_size, capture_time
@@ -317,6 +328,8 @@ def delete_picture(file_name, db, trash="./Trash/"):
 
 def display_duplicates(duplicates, db, trash="./Trash/"):
     from werkzeug.routing import PathConverter
+    import io
+
     class EverythingConverter(PathConverter):
         regex = '.*?'
 
@@ -345,6 +358,16 @@ def display_duplicates(duplicates, db, trash="./Trash/"):
         @app.route('/picture/<everything:file_name>', methods=['DELETE'])
         def delete_picture_(file_name, trash=trash):
             return str(delete_picture(file_name, db, trash))
+
+        @app.route('/heic-transform/<everything:file_name>', methods=['GET'])
+        def transcode_heic_(file_name):
+            heif_image = pyheif.read_heif(open(file_name, 'rb'))
+
+            image = Image.frombytes(
+                mode=heif_image.mode, size=heif_image.size, data=heif_image.data)
+            encoded = io.BytesIO()
+            image.save(encoded, format='JPEG')
+            return Response(encoded.getvalue(), mimetype='image/jpeg')
 
         app.run()
 
