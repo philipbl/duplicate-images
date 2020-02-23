@@ -45,7 +45,9 @@ from more_itertools import chunked
 from PIL import Image, ExifTags
 import pymongo
 from termcolor import cprint
+import colorama
 
+colorama.init()
 
 @contextmanager
 def connect_to_db(db_conn_string='./db'):
@@ -134,7 +136,7 @@ def hash_file(file):
 
         hashes = ''.join(sorted(hashes))
 
-        cprint("\tHashed {}".format(file), "blue")
+        cprint("\tHashed {}\n".format(file), "cyan")
         return file, hashes, file_size, image_size, capture_time
     except OSError:
         cprint("\tUnable to open {}".format(file), "red")

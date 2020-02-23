@@ -3,10 +3,12 @@ flask==1.0.2
 ImageHash==3.4
 jinja2==2.10
 more-itertools==2.2
-Pillow==4.3.0
+Pillow>=4.3.0
 pymongo>=3.6.0
 python-magic==0.4.15
+python-magic-bin==0.4.14
 termcolor==1.1.0
+colorama>=0.4.3
 Werkzeug==0.14.1
 Flask-Cors==3.0.3
 dnspython>=1.15.0
