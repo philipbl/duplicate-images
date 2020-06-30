@@ -13,115 +13,120 @@ Usage:
 Options:
     -h, --help                Show this screen
 
-    --db=<db_path>            The location of the database. (default: ./db)
+    --db=<db_path>            The location of the database or a MongoDB URI. (default: ./DupliFinder/DB)
 
     --parallel=<num_processes> The number of parallel processes to run to hash the image
-                               files (default: 8).
+                               files (default: number of CPUs).
 
     find:
         --print               Only print duplicate files rather than displaying HTML file
         --delete              Move all found duplicate pictures to the trash. This option takes priority over --print.
         --match-time          Adds the extra constraint that duplicate images must have the
                               same capture times in order to be considered.
-        --trash=<trash_path>  Where files will be put when they are deleted (default: ./Trash)
+        --trash=<trash_path>  Where files will be put when they are deleted (default: ./DupliFinder/Trash)
 """
 
 import concurrent.futures
 from contextlib import contextmanager
-from functools import partial
 import os
+import re
+import magic
+import math
 from pprint import pprint
 import shutil
 from subprocess import Popen, PIPE, TimeoutExpired
 from tempfile import TemporaryDirectory
-import time
 import webbrowser
-import math
 
-from flask import Flask, send_from_directory
+import base64
+
+from dateutil.parser import parse
+
+from flask import Flask, abort
 import imagehash
-from jinja2 import Template, FileSystemLoader, Environment
+from jinja2 import FileSystemLoader, Environment
 from more_itertools import chunked
 from PIL import Image, ExifTags
 import pymongo
-from termcolor import colored, cprint
+from termcolor import cprint
 
-
-TRASH = "./Trash/"
-DB_PATH = "./db"
-NUM_PROCESSES = 8
 
 
 @contextmanager
-def connect_to_db():
-    if not os.path.isdir(DB_PATH):
-        os.makedirs(DB_PATH)
+def connect_to_db(db_conn_string='./DupliFinder/DB'):
+    p = None
+    # If this is a URI
+    if 'mongodb://' == db_conn_string[:10] or 'mongodb+srv://' == db_conn_string[:14]:
+        client = pymongo.MongoClient(db_conn_string)
+        cprint("Connected server...", "yellow")
+    # If this is not a URI
+    else:
+        if not os.path.isdir(db_conn_string):
+            os.makedirs(db_conn_string)
+        p = Popen(['mongod', '--dbpath', db_conn_string], stdout=PIPE, stderr=PIPE)
+        try:
+            p.wait(timeout=2)
+            stdout, _ = p.communicate()
+            cprint("Error starting mongod", "red")
+            cprint(stdout.decode(), "red")
+            exit()
+        except TimeoutExpired:
+            pass
+        cprint("Started database...", "yellow")
+        client = pymongo.MongoClient()
 
-    p = Popen(['mongod', '--dbpath', DB_PATH], stdout=PIPE, stderr=PIPE)
+    db = client.DupliFinder
 
-    try:
-        p.wait(timeout=2)
-        stdout, stderr = p.communicate()
-        cprint("Error starting mongod", "red")
-        cprint(stdout.decode(), "red")
-        exit()
-    except TimeoutExpired:
-        pass
-
-    cprint("Started database...", "yellow")
-    client = pymongo.MongoClient()
-    db = client.image_database
-    images = db.images
-
-    yield images
+    yield db
 
     client.close()
-    cprint("Stopped database...", "yellow")
-    p.terminate()
+
+    if p is not None:
+        cprint("Stopped database...", "yellow")
+        p.terminate()
 
 
 def get_image_files(path):
+    """
+    Check path recursively for files. If any compatible file is found, it is
+    yielded with its full path.
+
+    :param path:
+    :return: yield absolute path
+    """
     def is_image(file_name):
-        file_name = file_name.lower()
-        return file_name.endswith('.jpg') or  \
-            file_name.endswith('.jpeg') or \
-            file_name.endswith('.png') or  \
-            file_name.endswith('.gif') or  \
-            file_name.endswith('.tiff')
+        # List mime types fully supported by Pillow
+        full_supported_formats = ['gif', 'jp2', 'jpeg', 'pcx', 'png', 'tiff', 'x-ms-bmp',
+                                  'x-portable-pixmap', 'x-xbitmap']
+        try:
+            mime = magic.from_file(file_name, mime=True)
+            return mime.rsplit('/', 1)[1] in full_supported_formats
+        except IndexError:
+            return False
 
     path = os.path.abspath(path)
-    for root, dirs, files in os.walk(path):
+    for root, _, files in os.walk(path):
         for file in files:
+            file = os.path.join(root, file)
             if is_image(file):
-                yield os.path.join(root, file)
+                yield file
 
 
 def hash_file(file):
     try:
-        hashes = []
         img = Image.open(file)
-
         file_size = get_file_size(file)
         image_size = get_image_size(img)
         capture_time = get_capture_time(img)
-
-        # 0 degree hash
-        hashes.append(str(imagehash.phash(img)))
-
-        # 90 degree hash
-        img = img.rotate(90, expand=True)
-        hashes.append(str(imagehash.phash(img)))
-
-        # 180 degree hash
-        img = img.rotate(90, expand=True)
-        hashes.append(str(imagehash.phash(img)))
-
-        # 270 degree hash
-        img = img.rotate(90, expand=True)
-        hashes.append(str(imagehash.phash(img)))
-
+        hashes = []
+        # hash the image 4 times and rotate it by 90 degrees each time
+        for angle in [ 0, 90, 180, 270 ]:
+            if angle > 0:
+                turned_img = img.rotate(angle, expand=True)
+            else:
+                turned_img = img
+            hashes.append(str(imagehash.phash(turned_img)))
         hashes = ''.join(sorted(hashes))
-
         cprint("\tHashed {}".format(file), "blue")
         return file, hashes, file_size, image_size, capture_time
     except OSError:
@@ -129,17 +134,17 @@ def hash_file(file):
         return None
 
 
-def hash_files_parallel(files):
-    with concurrent.futures.ProcessPoolExecutor(max_workers=NUM_PROCESSES) as executor:
+def hash_files_parallel(files, num_processes=None):
+    with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes) as executor:
         for result in executor.map(hash_file, files):
             if result is not None:
                 yield result
 
 
-def _add_to_database(file_, hash_, file_size, image_size, capture_time, db):
+def _add_file_to_database(file_, hash_, file_size, image_size, capture_time, db):
     try:
-        db.insert_one({"_id": file_,
-                       "hash": hash_,
+        db.Hashes.insert_one({"_id": file_,
+                       "hashes": hash_,
                        "file_size": file_size,
                        "image_size": image_size,
                        "capture_time": capture_time})
@@ -148,7 +153,7 @@ def _add_to_database(file_, hash_, file_size, image_size, capture_time, db):
 
 
 def _in_database(file, db):
-    return db.count({"_id": file}) > 0
+    return db.Hashes.count_documents({"_id": file}) > 0
 
 
 def new_image_files(files, db):
@@ -159,15 +164,13 @@ def new_image_files(files, db):
             yield file
 
 
-def add(paths, db):
+def add(paths, db, num_processes=None):
     for path in paths:
         cprint("Hashing {}".format(path), "blue")
         files = get_image_files(path)
         files = new_image_files(files, db)
-
-        for result in hash_files_parallel(files):
-            _add_to_database(*result, db=db)
-
+        for result in hash_files_parallel(files, num_processes):
+            _add_file_to_database(*result, db=db)
         cprint("...done", "blue")
 
 
@@ -181,17 +184,17 @@ def remove(paths, db):
 
 
 def remove_image(file, db):
-    db.delete_one({'_id': file})
+    db.Hashes.delete_one({'_id': file})
 
 
 def clear(db):
-    db.drop()
+    db.Hashes.drop()
+    db.Matches.drop()
 
 
 def show(db):
-    total = db.count()
-    pprint(list(db.find()))
-    print("Total: {}".format(total))
+    pprint(list(db.Hashes.find()))
+    print("Total: {}".format(db.Hashes.count_documents()))
 
 
 def same_time(dup):
@@ -207,25 +210,31 @@ def same_time(dup):
 
 
 def find(db, match_time=False):
-    dups = db.aggregate([{
-        "$group": {
-            "_id": "$hash",
-            "total": {"$sum": 1},
-            "items": {
-                "$push": {
-                    "file_name": "$_id",
-                    "file_size": "$file_size",
-                    "image_size": "$image_size",
-                    "capture_time": "$capture_time"
+    pipeline = [
+            {"$sort": {
+                    "capture_time": +1,
+                    "file_size": +1,
+                    "file_name": +1
+                }
+            },{"$group": {
+                    "_id": "$hashes",
+                    "total": {"$sum": 1},
+                    "items": {
+                        "$push": {
+                            "file_name": "$_id",
+                            "file_size": "$file_size",
+                            "image_size": "$image_size",
+                            "capture_time": "$capture_time"
+                        }
+                    }
+                }
+            },{
+                "$match": {
+                    "total": {"$gt": 1}
                 }
             }
-        }
-    },
-    {
-        "$match": {
-            "total": {"$gt": 1}
-        }
-    }])
+        ]
+    dups = db.Hashes.aggregate(pipeline)
 
     if match_time:
         dups = (d for d in dups if same_time(d))
@@ -234,19 +243,19 @@ def find(db, match_time=False):
 
 
 def delete_duplicates(duplicates, db):
-    results = [delete_picture(x['file_name'], db)
+    results = [delete_picture(x['file_name'], db.Hashes)
                for dup in duplicates for x in dup['items'][1:]]
     cprint("Deleted {}/{} files".format(results.count(True),
                                         len(results)), 'yellow')
 
 
-def delete_picture(file_name, db):
-    cprint("Moving {} to {}".format(file_name, TRASH), 'yellow')
-    if not os.path.exists(TRASH):
-        os.makedirs(TRASH)
+def delete_picture(file_name, db, trash="./DupliFinder/Trash/"):
+    cprint("Moving {} to {}".format(file_name, trash), 'yellow')
+    if not os.path.exists(trash):
+        os.makedirs(trash)
     try:
-        shutil.move(file_name, TRASH + os.path.basename(file_name))
-        remove_image(file_name, db)
+        shutil.move(file_name, trash + os.path.basename(file_name))
+        remove_image(file_name, db.Hashes)
     except FileNotFoundError:
         cprint("File not found {}".format(file_name), 'red')
         return False
@@ -257,7 +266,7 @@ def delete_picture(file_name, db):
     return True
 
 
-def display_duplicates(duplicates, db):
+def display_duplicates(duplicates, db, trash="./DupliFinder/Trash/"):
     from werkzeug.routing import PathConverter
     class EverythingConverter(PathConverter):
         regex = '.*?'
@@ -281,11 +290,25 @@ def display_duplicates(duplicates, db):
                                current=i,
                                total=math.ceil(len(duplicates) / chunk_size)))
 
-        webbrowser.open("file://{}/{}".format(folder, '0.html'))
+        @app.route('/photo/<everything:photo>', methods=['GET'])
+        def show_image_(photo):
+            if not os.path.isfile(photo):
+                abort(404)
+            with open(photo, "rb") as image_file:
+                data = image_file.read()
+            return data
 
-        @app.route('/picture/<everything:file_name>', methods=['DELETE'])
-        def delete_picture_(file_name):
-            return str(delete_picture(file_name, db))
+        @app.route('/page/<everything:page>', methods=['GET'])
+        def show_page_(page):
+            with open('{}/{}.html'.format(folder, page), 'r') as file:
+                data = file.read()
+            return data
+
+        @app.route('/photo/<everything:file_name>', methods=['DELETE'])
+        def delete_picture_(file_name, trash=trash):
+            return str(delete_picture(file_name, db, trash))
+
+        webbrowser.open("http://127.0.0.1:5000/page/0")
 
         app.run()
 
@@ -302,37 +325,56 @@ def get_image_size(img):
 
 
 def get_capture_time(img):
+    def get_time(str):
+        dto = parse(str)
+        return dto.timestamp()
     try:
         exif = {
             ExifTags.TAGS[k]: v
             for k, v in img._getexif().items()
             if k in ExifTags.TAGS
         }
-        return exif["DateTimeOriginal"]
+        return get_time(exif["DateTimeOriginal"])
     except:
-        return "Time unknown"
+        bn = os.path.splitext(os.path.basename(img.filename))[0]
+        flts = os.path.getctime(img.filename)
+        if None!=re.match(r'\d{4}-\d{2}-\d{2}-\d{2}h\d{2}m\d{2}', bn):
+            fnts = get_time(re.sub(r'.*(\d{4}-\d{2}-\d{2}-\d{2}h\d{2}m\d{2}).*',r'\1',bn))
+            return fnts if fnts<flts else flts
+        elif None!=re.match(r'\d{4}-\d{2}-\d{2}', bn):
+            fnts = get_time(re.sub(r'.*(\d{4}-\d{2}-\d{2}).*',r'\1-23h59m59',bn))
+            return fnts if fnts<flts else flts
+        else:
+            return flts
 
 
 if __name__ == '__main__':
     from docopt import docopt
+
     args = docopt(__doc__)
 
     if args['--trash']:
         TRASH = args['--trash']
+    else:
+        TRASH = "./DupliFinder/Trash/"
 
     if args['--db']:
         DB_PATH = args['--db']
+    else:
+        DB_PATH = "./DupliFinder/DB"
 
     if args['--parallel']:
-        NUM_PROCESSES = args['--parallel']
+        NUM_PROCESSES = int(args['--parallel'])
+    else:
+        NUM_PROCESSES = None
 
-    with connect_to_db() as db:
-        if args['add']:
-            add(args['<path>'], db)
+    with connect_to_db(db_conn_string=DB_PATH) as db:
+        if args['clear']:
+            clear(db)
+        elif args['add']:
+            add(args['<path>'], db, NUM_PROCESSES)
         elif args['remove']:
             remove(args['<path>'], db)
-        elif args['clear']:
-            clear(db)
         elif args['show']:
             show(db)
         elif args['find']:
