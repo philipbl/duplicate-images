@@ -286,15 +286,25 @@ def display_duplicates(duplicates, db, trash="./Trash/"):
                                total=total)
 
     with TemporaryDirectory() as folder:
-        # Generate all of the HTML files
-        chunk_size = 25
-        for i, dups in enumerate(chunked(duplicates, chunk_size)):
-            with open('{}/{}.html'.format(folder, i), 'w') as f:
-                f.write(render(dups,
-                               current=i,
-                               total=math.ceil(len(duplicates) / chunk_size)))
 
-        webbrowser.open("file://{}/{}".format(folder, '0.html'))
+        if len(duplicates) == 0:
+            env = Environment(loader=FileSystemLoader('template'))
+            template = env.get_template('no_duplicates.html')
+            with open('{}/noDups.html'.format(folder), 'w') as f:
+                f.write(template.render())
+            
+            webbrowser.open("file://{}/{}".format(folder, 'noDups.html'))
+
+        else:
+            # Generate all of the HTML files
+            chunk_size = 25
+            for i, dups in enumerate(chunked(duplicates, chunk_size)):
+                with open('{}/{}.html'.format(folder, i), 'w') as f:
+                    f.write(render(dups,
+                                   current=i,
+                                   total=math.ceil(len(duplicates) / chunk_size)))
+
+            webbrowser.open("file://{}/{}".format(folder, '0.html'))
 
         @app.route('/picture/<everything:file_name>', methods=['DELETE'])
         def delete_picture_(file_name, trash=trash):
