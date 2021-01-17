@@ -7,7 +7,8 @@ Usage:
     duplicate_finder.py remove <path> ... [--db=<db_path>]
     duplicate_finder.py clear [--db=<db_path>]
     duplicate_finder.py show [--db=<db_path>]
-    duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>] [--threshold=<num>] 
+    duplicate_finder.py cleanup [--db=<db_path>]
+    duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>] [--threshold=<num>]
     duplicate_finder.py -h | --help
 
 Options:
@@ -217,6 +218,15 @@ def show(db):
     pprint(list(db.find()))
     print("Total: {}".format(total))
 
+def cleanup(db):
+    count = 0
+    files = db.find()
+    for id in files:
+        file_name = id['_id']
+        if not os.path.exists(file_name):
+            remove_image(file_name, db)
+            count += 1
+    cprint("Cleanup removed {} files".format(count), 'yellow')
 
 def same_time(dup):
     items = dup['items']
@@ -231,25 +241,29 @@ def same_time(dup):
 
 
 def find(db, match_time=False):
-    dups = db.aggregate([{
-        "$group": {
-            "_id": "$hash",
-            "total": {"$sum": 1},
-            "items": {
-                "$push": {
-                    "file_name": "$_id",
-                    "file_size": "$file_size",
-                    "image_size": "$image_size",
-                    "capture_time": "$capture_time"
+    dups = db.aggregate([
+        {
+            "$group": {
+                "_id": "$hash",
+                "total": {"$sum": 1},
+                "file_size": { "$max": "$file_size" },
+                "items": {
+                    "$push": {
+                        "file_name": "$_id",
+                        "file_size": "$file_size",
+                        "image_size": "$image_size",
+                        "capture_time": "$capture_time"
+                    }
                 }
             }
-        }
-    },
-    {
-        "$match": {
-            "total": {"$gt": 1}
-        }
-    }])
+        },
+        {
+            "$match": {
+                "total": {"$gt": 1}
+            }
+        },
+        {"$sort": {"file_size": -1}}
+    ])
 
     if match_time:
         dups = (d for d in dups if same_time(d))
@@ -421,6 +435,8 @@ if __name__ == '__main__':
             remove(args['<path>'], db)
         elif args['clear']:
             clear(db)
+        elif args['cleanup']:
+            cleanup(db)
         elif args['show']:
             show(db)
         elif args['find']:
