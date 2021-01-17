@@ -10,4 +10,4 @@ termcolor==1.1.0
 Werkzeug==1.0.1
 Flask-Cors==3.0.9
 pybktree==1.1
-git+https://github.com/david-poirier-csn/pyheif.git
+pyheif==0.5.1

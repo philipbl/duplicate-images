@@ -9,7 +9,7 @@ import duplicate_finder
 
 
 def test_get_image_files():
-    images = ['tests/images/u.jpg', 'tests/images/file.png', 'tests/images/file.gif', 'tests/images/file.tiff',
+    images = ['tests/images/u.jpg', 'tests/images/u.heic', 'tests/images/file.png', 'tests/images/file.gif', 'tests/images/file.tiff',
               'tests/images/image.txt', 'tests/images/deeply/nested/different.jpg',
               'tests/images/deeply/nested/image/sideways.jpg', 'tests/images/deeply/nested/image/smaller.jpg']
     other = ['tests/images/not_image.txt', 'tests/images/not_image.jpb', 'README.md']
@@ -25,7 +25,7 @@ def test_hash_file():
     file, hash_, file_size, image_size, capture_time = result
 
     assert file == image_name
-    assert hash_ == '4b9e705db4450db6695cba149e2b2d65c3a950e13c7e8778e1cbda081e12a7eb'
+    assert hash_ == '87d35b107818e5d7963a5d2869d4b4b6c3950a873c7ee11ed2790eba2da2b03d'
 
     result = duplicate_finder.hash_file('tests/images/nothing.png')
     assert result is None
@@ -57,7 +57,7 @@ def test_hash_files_parallel():
 
     file, hash_, file_size, image_size, capture_time = results[0]
     assert file == 'tests/images/u.jpg'
-    assert hash_ == '4b9e705db4450db6695cba149e2b2d65c3a950e13c7e8778e1cbda081e12a7eb'
+    assert hash_ == '87d35b107818e5d7963a5d2869d4b4b6c3950a873c7ee11ed2790eba2da2b03d'
 
 
     duplicate_finder.NUM_PROCESSES = 1
@@ -111,7 +111,7 @@ def test_add():
 
     db_result = db.find_one({'_id' : file_name})
     assert db_result['_id'] == file_name
-    assert db_result['hash'] == '4b9e705db4450db6695cba149e2b2d65c3a950e13c7e8778e1cbda081e12a7eb'
+    assert db_result['hash'] == '87d35b107818e5d7963a5d2869d4b4b6c3950a873c7ee11ed2790eba2da2b03d'
     assert db.count() > 0
 
 
@@ -157,7 +157,7 @@ def test_find():
 def test_dedup():
     db = mongomock.MongoClient().image_database.images
     duplicate_finder.add(['tests'], db)
-    assert db.count() == 8
+    assert db.count() == 9
 
     dups = duplicate_finder.find(db, match_time=False)
     assert len(dups) == 2
