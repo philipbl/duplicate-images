@@ -295,24 +295,26 @@ def find_threshold(db, threshold=1):
         hash_len = len(document['hash'])
         int_hash = int(document['hash'], 16)
         similar = tree.find(int_hash, threshold)
-        similar = list(set(similar))
         if len(similar) > 1:
-           similars = []
-           for (distance, item_hash) in similar:
-               #if distance > 0:
-                   item_hash = format(item_hash, '0' + str(hash_len) + 'x')
-                   deduplicated.add(item_hash)
-                   for item in db.find({'hash': item_hash}):
-                       item['file_name'] = item['_id']
-                       similars.append(item)
-           if len(similars) > 0:
-               dups.append(
-                   {
-                      '_id': document['hash'],
-                      'total': len(similars),
-                      'items': similars
-                   }
-               )
+            similar = list(set(similar))
+
+            similars = []
+            for (distance, item_hash) in similar:
+                item_hash = format(item_hash, '0' + str(hash_len) + 'x')
+                if distance > 0:
+                    deduplicated.add(item_hash)
+
+                for item in db.find({'hash': item_hash}):
+                    item['file_name'] = item['_id']
+                    similars.append(item)
+            if len(similars) > 0:
+                dups.append(
+                    {
+                        '_id': document['hash'],
+                        'total': len(similars),
+                        'items': similars
+                    }
+                )
 
     return dups
 
