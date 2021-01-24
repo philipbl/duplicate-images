@@ -114,7 +114,6 @@ def test_add():
     assert db_result['hash'] == '87d35b107818e5d7963a5d2869d4b4b6c3950a873c7ee11ed2790eba2da2b03d'
     assert db.count() > 0
 
-
 def test_remove():
     db = mongomock.MongoClient().image_database.images
 
@@ -153,6 +152,18 @@ def test_find():
     time_dups = duplicate_finder.find(db, match_time=True)
     assert dups == time_dups
 
+def test_find_fuzzy():
+    db = mongomock.MongoClient().image_database.images
+    duplicate_finder.add(['tests/images/'], db)
+
+    dups = duplicate_finder.find_threshold(db, 0)
+    assert len(dups) == 2
+    assert dups[0]['total'] == 2
+    assert dups[1]['total'] == 5
+
+    dups = duplicate_finder.find_threshold(db, 10)
+    assert len(dups) == 1
+    assert dups[0]['total'] == 8
 
 def test_dedup():
     db = mongomock.MongoClient().image_database.images
