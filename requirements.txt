@@ -3,7 +3,7 @@ flask==1.0.2
 ImageHash==3.4
 jinja2==2.10
 more-itertools==2.2
-Pillow==4.3.0
+Pillow==9.0.0
 pymongo>=3.6.0
 python-magic==0.4.15
 termcolor==1.1.0
