@@ -8,7 +8,8 @@ Usage:
     duplicate_finder.py clear [--db=<db_path>]
     duplicate_finder.py show [--db=<db_path>]
     duplicate_finder.py cleanup [--db=<db_path>]
-    duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] [--db=<db_path>] [--threshold=<num>]
+    duplicate_finder.py find [--print] [--delete] [--match-time] [--trash=<trash_path>] \
+[--db=<db_path>] [--threshold=<num>]
     duplicate_finder.py -h | --help
 
 Options:
@@ -20,9 +21,11 @@ Options:
                                files (default: number of CPUs).
 
     find:
-        --threshold=<num>     Image matching threshold. Number of different bits in Hamming distance. False positives are possible.
+        --threshold=<num>     Image matching threshold. Number of different bits in Hamming \
+distance. False positives are possible.
         --print               Only print duplicate files rather than displaying HTML file
-        --delete              Move all found duplicate pictures to the trash. This option takes priority over --print.
+        --delete              Move all found duplicate pictures to the trash. This option \
+takes priority over --print.
         --match-time          Adds the extra constraint that duplicate images must have the
                               same capture times in order to be considered.
         --trash=<trash_path>  Where files will be put when they are deleted (default: ./Trash)
@@ -31,27 +34,41 @@ Options:
 import concurrent.futures
 from contextlib import contextmanager
 import os
-import magic
 import math
 from pprint import pprint
 import shutil
 from subprocess import Popen, PIPE, TimeoutExpired
+import sys
 from tempfile import TemporaryDirectory
-import webbrowser
 
+import webbrowser
+import binascii
+import io
+from jinja2 import FileSystemLoader, Environment
 from flask import Flask, Response
 from flask_cors import CORS
-import imagehash
-from jinja2 import FileSystemLoader, Environment
+
+
 from more_itertools import chunked
-from PIL import Image, ExifTags
 import pymongo
-from termcolor import cprint
+from PIL import Image
 import pybktree
-import pyheif
+from termcolor import cprint
+
+from hashers import BinaryHasher, ImageHasher
+
+
+def get_hashers() -> list:
+    """Return array of active hashers"""
+    return [
+        BinaryHasher(),
+        ImageHasher(),
+    ]
+
 
 @contextmanager
 def connect_to_db(db_conn_string='./db'):
+    """Connect to mongo"""
     p = None
 
     # Determine db_conn_string is a mongo URI or a path
@@ -67,14 +84,15 @@ def connect_to_db(db_conn_string='./db'):
         if not os.path.isdir(db_conn_string):
             os.makedirs(db_conn_string)
 
-        p = Popen(['mongod', '--dbpath', db_conn_string], stdout=PIPE, stderr=PIPE)
+        p = Popen(['mongod', '--dbpath', db_conn_string],
+                  stdout=PIPE, stderr=PIPE)
 
         try:
             p.wait(timeout=2)
-            stdout, stderr = p.communicate()
+            stdout, _ = p.communicate()
             cprint("Error starting mongod", "red")
             cprint(stdout.decode(), "red")
-            exit()
+            sys.exit()
         except TimeoutExpired:
             pass
 
@@ -92,103 +110,85 @@ def connect_to_db(db_conn_string='./db'):
         p.terminate()
 
 
-def get_image_files(path):
+def get_files(path: str):
     """
-    Check path recursively for files. If any compatible file is found, it is
-    yielded with its full path.
+    Check path recursively for files and yield full path.
 
     :param path:
     :return: yield absolute path
     """
-    def is_image(file_name):
-        # List mime types fully supported by Pillow
-        full_supported_formats = ['gif', 'jp2', 'jpeg', 'pcx', 'png', 'tiff', 'x-ms-bmp',
-                                  'x-portable-pixmap', 'x-xbitmap', 'heic']
-        try:
-            mime = magic.from_file(file_name, mime=True)
-            return mime.rsplit('/', 1)[1] in full_supported_formats
-        except IndexError:
-            return False
-
     path = os.path.abspath(path)
-    for root, dirs, files in os.walk(path):
+    for root, _, files in os.walk(path):
         for file in files:
             file = os.path.join(root, file)
-            if is_image(file):
-                yield file
+            yield file
 
-def hash_image(img):
-    image_size = get_image_size(img)
-    capture_time = get_capture_time(img)
 
+def hash_file(file_path: str):
+    """Hash file with all hashers"""
     hashes = []
-    # hash the image 4 times and rotate it by 90 degrees each time
-    for angle in [ 0, 90, 180, 270 ]:
-        if angle > 0:
-            turned_img = img.rotate(angle, expand=True)
-        else:
-            turned_img = img
-        hashes.append(str(imagehash.phash(turned_img)))
+    meta = {}
+    hashers = get_hashers()
 
-    hashes = ''.join(sorted(hashes))
-    return hashes, image_size, capture_time
-
-def hash_file(file):
     try:
-        mime = magic.from_file(file, mime=True)
-        if mime.rsplit('/', 1)[1] == 'heic':
-            heif = pyheif.read_heif(open(file, 'rb'))
-            img = Image.frombytes(
-                mode=heif.mode, size=heif.size, data=heif.data)
-        else:
-            img = Image.open(file)
+        for hasher in hashers:
+            if hasher.is_applicable(file_path):
+                with open(file_path, 'rb') as file_object:
+                    (new_hashes, new_meta) = hasher.hash(file_object)
+                    hashes = hashes + new_hashes
+                    meta = meta | new_meta
 
-        file_size = get_file_size(file)
-
-        hashes, image_size, capture_time = hash_image(img)
-
-        cprint("\tHashed {}".format(file), "blue")
-        return file, hashes, file_size, image_size, capture_time
+        cprint(f'\tHashed {file_path}', "blue")
     except OSError:
-        cprint("\tUnable to open {}".format(file), "red")
+        cprint(f'\tUnable to open {file_path}', "red")
         return None
+
+    return file_path, (
+        hashes,
+        meta
+    )
 
 
 def hash_files_parallel(files, num_processes=None):
+    """Hash files in parallel in subprocesses"""
     with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes) as executor:
         for result in executor.map(hash_file, files):
             if result is not None:
                 yield result
 
 
-def _add_to_database(file_, hash_, file_size, image_size, capture_time, db):
+def _add_to_database(file_path: str, hashes_meta: tuple, db):
+    """Add hashes and meta information of a file to database"""
+    (hashes, meta) = hashes_meta
     try:
-        db.insert_one({"_id": file_,
-                       "hash": hash_,
-                       "file_size": file_size,
-                       "image_size": image_size,
-                       "capture_time": capture_time})
+        db.insert_one({"_id": file_path,
+                       "hashes": hashes,
+                       "meta": meta,
+                       })
     except pymongo.errors.DuplicateKeyError:
-        cprint("Duplicate key: {}".format(file_), "red")
+        cprint(f'Duplicate key: {file_path}', "red")
 
 
 def _in_database(file, db):
+    """Return if file exists in database"""
     return db.count_documents({"_id": file}) > 0
 
 
-def new_image_files(files, db):
-    for file in files:
-        if _in_database(file, db):
-            cprint("\tAlready hashed {}".format(file), "green")
+def new_files(files, db):
+    """yield only new files, already hashed files are skipped"""
+    for file_path in files:
+        if _in_database(file_path, db):
+            cprint(f'\tAlready hashed {file_path}', "green")
         else:
-            yield file
+            yield file_path
 
 
 def add(paths, db, num_processes=None):
+    """Lopp through files and add hash them"""
     for path in paths:
-        cprint("Hashing {}".format(path), "blue")
-        files = get_image_files(path)
-        files = new_image_files(files, db)
+        cprint(f'Hashing {path}', "blue")
+        files = get_files(path)
+        files = new_files(files, db)
 
         for result in hash_files_parallel(files, num_processes):
             _add_to_database(*result, db=db)
@@ -197,62 +197,70 @@ def add(paths, db, num_processes=None):
 
 
 def remove(paths, db):
+    """Remove file from database"""
     for path in paths:
-        files = get_image_files(path)
-
-        # TODO: Can I do a bulk delete?
+        files = get_files(path)
         for file in files:
-            remove_image(file, db)
+            remove_file(file, db)
+
+
+def remove_file(file, db):
+    """Remove file from database"""
+    db.delete_one({'_id': file})
 
 
 def remove_image(file, db):
+    """Remove file from database"""
     db.delete_one({'_id': file})
 
 
 def clear(db):
+    """Clear database"""
     db.drop()
 
 
 def show(db):
-    total = db.count_documents()
+    """Show all files from the databse"""
+    total = db.count_documents({})
     pprint(list(db.find()))
-    print("Total: {}".format(total))
+    print(f'Total: {total}')
+
 
 def cleanup(db):
+    """Clean disappeared files from the database"""
     count = 0
     files = db.find()
-    for id in files:
-        file_name = id['_id']
+    for _id in files:
+        file_name = _id['_id']
         if not os.path.exists(file_name):
             remove_image(file_name, db)
             count += 1
-    cprint("Cleanup removed {} files".format(count), 'yellow')
+    cprint(f'Cleanup removed {count} files', 'yellow')
+
 
 def same_time(dup):
+    """Check if capture_time meta attribute is the same"""
     items = dup['items']
-    if "Time unknown" in items:
-        # Since we can't know for sure, better safe than sorry
-        return True
 
-    if len(set([i['capture_time'] for i in items])) > 1:
+    if len({(i['meta']['capture_time'] if 'capture_time' in i['meta'] else '') for i in items})>1:
         return False
 
     return True
 
 
 def find(db, match_time=False):
+    """Find duplictes by equal hashes"""
     dups = db.aggregate([
+        {"$unwind": "$hashes"},
         {
             "$group": {
-                "_id": "$hash",
+                "_id": "$hashes",
                 "total": {"$sum": 1},
-                "file_size": { "$max": "$file_size" },
+                "file_size": {"$max": "$meta.file_size"},
                 "items": {
                     "$push": {
                         "file_name": "$_id",
-                        "file_size": "$file_size",
-                        "image_size": "$image_size",
-                        "capture_time": "$capture_time"
+                        "meta": "$meta",
                     }
                 }
             }
@@ -270,88 +278,113 @@ def find(db, match_time=False):
 
     return list(dups)
 
+
 def find_threshold(db, threshold=1):
+    """Find duplicates by number of bits of Humming distance"""
     dups = []
     # Build a tree
-    cursor = db.find()
     tree = pybktree.BKTree(pybktree.hamming_distance)
 
     cprint('Finding fuzzy duplicates, it might take a while...')
     cnt = 0
     for document in db.find():
-        int_hash = int(document['hash'], 16)
-        tree.add(int_hash)
+        for doc_hash in document['hashes']:
+            int_hash = int.from_bytes(doc_hash, "big")
+            tree.add(int_hash)
         cnt = cnt + 1
 
     deduplicated = set()
 
     scanned = 0
     for document in db.find():
-        cprint("\r%d%%" % (scanned * 100 / (cnt - 1)), end='')
+        cprint(f'\r{(scanned * 100 / (cnt - 1))}%', end='')
         scanned = scanned + 1
-        if document['hash'] in deduplicated:
-            continue
-        deduplicated.add(document['hash'])
-        hash_len = len(document['hash'])
-        int_hash = int(document['hash'], 16)
-        similar = tree.find(int_hash, threshold)
-        if len(similar) > 1:
-            similar = list(set(similar))
+        max_size = document['meta']['file_size']
+        for doc_hash in document['hashes']:
+            if doc_hash in deduplicated:
+                continue
+            deduplicated.add(doc_hash)
+            int_hash = int.from_bytes(doc_hash, "big")
 
-            similars = []
-            for (distance, item_hash) in similar:
-                item_hash = format(item_hash, '0' + str(hash_len) + 'x')
-                if distance > 0:
-                    deduplicated.add(item_hash)
+            similar = tree.find(int_hash, threshold)
+            if len(similar) > 1:
+                similar = list(set(similar))
 
-                for item in db.find({'hash': item_hash}):
-                    item['file_name'] = item['_id']
-                    similars.append(item)
-            if len(similars) > 0:
-                dups.append(
-                    {
-                        '_id': document['hash'],
-                        'total': len(similars),
-                        'items': similars
-                    }
-                )
+                similars = []
+                for (distance, item_hash) in similar:
+                    if distance > 0:
+                        deduplicated.add(item_hash)
+
+                    for item in db.find({'hashes': binascii.unhexlify(hex(item_hash)[2:])}):
+                        item['file_name'] = item['_id']
+                        similars.append(item)
+                        max_size = max_size if item['meta']['file_size'] <= max_size \
+                            else item['meta']['file_size']
+                if len(similars) > 0:
+                    dups.append(
+                        {
+                            '_id': doc_hash,
+                            'total': len(similars),
+                            'items': similars,
+                            'file_size': max_size
+                        }
+                    )
 
     return dups
 
+
 def delete_duplicates(duplicates, db):
+    """Delete duplicates except the first one"""
     results = [delete_picture(x['file_name'], db)
                for dup in duplicates for x in dup['items'][1:]]
-    cprint("Deleted {}/{} files".format(results.count(True),
-                                        len(results)), 'yellow')
+    cprint(f'Deleted {results.count(True)}/{len(results)} files', 'yellow')
 
 
 def delete_picture(file_name, db, trash="./Trash/"):
-    cprint("Moving {} to {}".format(file_name, trash), 'yellow')
+    """Delete picture file and from the database"""
+    cprint(f'Moving {file_name} to {trash}', 'yellow')
     if not os.path.exists(trash):
         os.makedirs(trash)
     try:
         shutil.move(file_name, trash + os.path.basename(file_name))
         remove_image(file_name, db)
     except FileNotFoundError:
-        cprint("File not found {}".format(file_name), 'red')
+        cprint(f'File not found {file_name}', 'red')
         return False
     except Exception as e:
-        cprint("Error: {}".format(str(e)), 'red')
+        cprint(f'Error: {str(e)}', 'red')
         return False
 
     return True
 
 
+def transpose_duplicagtes(duplicates):
+    """Transpose duplictes to render in columns"""
+    for group in duplicates:
+        items_clount = len(group['items'])
+        row = {
+            'id': [''] * items_clount,
+            'file_name': [''] * items_clount,
+        }
+        index = 0
+        for image in group['items']:
+            row['id'][index] = image['file_name']
+            row['file_name'][index] = image['file_name']
+            for key, value in image['meta'].items():
+                if key not in row:
+                    row[key] = [''] * items_clount
+                row[key][index] = value
+            index += 1
+        group['items'] = row
+
+    return duplicates
+
+
 def display_duplicates(duplicates, db, trash="./Trash/"):
-    from werkzeug.routing import PathConverter
-    import io
-
-    class EverythingConverter(PathConverter):
-        regex = '.*?'
-
+    """Displays duplicates in browser"""
+    duplicates = transpose_duplicagtes(duplicates)
     app = Flask(__name__)
     CORS(app)
-    app.url_map.converters['everything'] = EverythingConverter
 
     def render(duplicates, current, total):
         env = Environment(loader=FileSystemLoader('template'))
@@ -363,52 +396,26 @@ def display_duplicates(duplicates, db, trash="./Trash/"):
     with TemporaryDirectory() as folder:
         # Generate all of the HTML files
         chunk_size = 25
-        for i, dups in enumerate(chunked(duplicates, chunk_size)):
-            with open('{}/{}.html'.format(folder, i), 'w') as f:
-                f.write(render(dups,
+        for i, dups_page in enumerate(chunked(duplicates, chunk_size)):
+            with open(f'{folder}/{i}.html', 'w', encoding="utf-8") as f:
+                f.write(render(dups_page,
                                current=i,
                                total=math.ceil(len(duplicates) / chunk_size)))
 
-        webbrowser.open("file://{}/{}".format(folder, '0.html'))
+        webbrowser.open(f'file://{folder}/0.html')
 
-        @app.route('/picture/<everything:file_name>', methods=['DELETE'])
+        @app.route('/picture/<path:file_name>', methods=['DELETE'])
         def delete_picture_(file_name, trash=trash):
-            return str(delete_picture(file_name, db, trash))
+            return str(delete_picture('/' + file_name, db, trash))
 
-        @app.route('/heic-transform/<everything:file_name>', methods=['GET'])
+        @app.route('/heic-transform/<path:file_name>', methods=['GET'])
         def transcode_heic_(file_name):
-            heif_image = pyheif.read_heif(open(file_name, 'rb'))
-
-            image = Image.frombytes(
-                mode=heif_image.mode, size=heif_image.size, data=heif_image.data)
+            heif_image = Image.open('/' + file_name)
             encoded = io.BytesIO()
-            image.save(encoded, format='JPEG')
+            heif_image.save(encoded, format='JPEG')
             return Response(encoded.getvalue(), mimetype='image/jpeg')
 
         app.run()
-
-
-def get_file_size(file_name):
-    try:
-        return os.path.getsize(file_name)
-    except FileNotFoundError:
-        return 0
-
-
-def get_image_size(img):
-    return "{} x {}".format(*img.size)
-
-
-def get_capture_time(img):
-    try:
-        exif = {
-            ExifTags.TAGS[k]: v
-            for k, v in img._getexif().items()
-            if k in ExifTags.TAGS
-        }
-        return exif["DateTimeOriginal"]
-    except:
-        return "Time unknown"
 
 
 if __name__ == '__main__':
@@ -430,27 +437,27 @@ if __name__ == '__main__':
     else:
         NUM_PROCESSES = None
 
-    with connect_to_db(db_conn_string=DB_PATH) as db:
+    with connect_to_db(db_conn_string=DB_PATH) as main_db:
         if args['add']:
-            add(args['<path>'], db, NUM_PROCESSES)
+            add(args['<path>'], main_db, NUM_PROCESSES)
         elif args['remove']:
-            remove(args['<path>'], db)
+            remove(args['<path>'], main_db)
         elif args['clear']:
-            clear(db)
+            clear(main_db)
         elif args['cleanup']:
-            cleanup(db)
+            cleanup(main_db)
         elif args['show']:
-            show(db)
+            show(main_db)
         elif args['find']:
             if args['--threshold'] is not None:
-                dups = find_threshold(db, int(args['--threshold']))
+                main_dups = find_threshold(main_db, int(args['--threshold']))
             else:
-                dups = find(db, args['--match-time'])
+                main_dups = find(main_db, args['--match-time'])
 
             if args['--delete']:
-                delete_duplicates(dups, db)
+                delete_duplicates(main_dups, main_db)
             elif args['--print']:
-                pprint(dups)
-                print("Number of duplicates: {}".format(len(dups)))
+                pprint(main_dups)
+                print(f'Number of duplicates: {len(main_dups)}')
             else:
-                display_duplicates(dups, db=db)
+                display_duplicates(main_dups, db=main_db)
