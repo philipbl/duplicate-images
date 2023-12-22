@@ -25,11 +25,14 @@ class ImageHasher(abstracthasher.AbstractHasher):
                 if k in ExifTags.TAGS
             }
             return exif["DateTimeOriginal"]
-        except:
+        except Exception:
             return "Time unknown"
 
     def hash(self, file_object) -> tuple:
-        img = Image.open(file_object)
+        if isinstance(file_object, Image.Image):
+            img = file_object
+        else:
+            img = Image.open(file_object)
 
         hashes = []
         # hash the image 4 times and rotate it by 90 degrees each time

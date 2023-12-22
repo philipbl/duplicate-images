@@ -17,14 +17,14 @@ Options:
 
     --db=<db_path>            The location of the database or a MongoDB URI. (default: ./db)
 
-    --parallel=<num_processes> The number of parallel processes to run to hash the image
-                               files (default: number of CPUs).
+    --parallel=<num_processes> The number of parallel processes to run to hash the files
+                               (default: number of CPUs).
 
     find:
-        --threshold=<num>     Image matching threshold. Number of different bits in Hamming \
+        --threshold=<num>     Hash matching threshold. Number of different bits in Hamming \
 distance. False positives are possible.
         --print               Only print duplicate files rather than displaying HTML file
-        --delete              Move all found duplicate pictures to the trash. This option \
+        --delete              Move all found duplicate files to the trash. This option \
 takes priority over --print.
         --match-time          Adds the extra constraint that duplicate images must have the
                               same capture times in order to be considered.
@@ -55,7 +55,7 @@ from PIL import Image
 import pybktree
 from termcolor import cprint
 
-from hashers import BinaryHasher, ImageHasher
+from hashers import BinaryHasher, ImageHasher, VideoHasher  # , VideoBarcodeHasher
 
 
 def get_hashers() -> list:
@@ -63,6 +63,8 @@ def get_hashers() -> list:
     return [
         BinaryHasher(),
         ImageHasher(),
+        VideoHasher(ImageHasher()),
+        # VideoBarcodeHasher(ImageHasher()),
     ]
 
 
@@ -73,7 +75,8 @@ def connect_to_db(db_conn_string='./db'):
 
     # Determine db_conn_string is a mongo URI or a path
     # If this is a URI
-    if 'mongodb://' == db_conn_string[:10] or 'mongodb+srv://' == db_conn_string[:14]:
+    if 'mongodb://' == db_conn_string[:10] \
+            or 'mongodb+srv://' == db_conn_string[:14]:
         client = pymongo.MongoClient(db_conn_string)
         cprint("Connected server...", "yellow")
         db = client.image_database
@@ -117,6 +120,9 @@ def get_files(path: str):
     :param path:
     :return: yield absolute path
     """
+    if os.path.isfile(path):
+        yield path
+
     path = os.path.abspath(path)
     for root, _, files in os.walk(path):
         for file in files:
@@ -134,13 +140,20 @@ def hash_file(file_path: str):
         for hasher in hashers:
             if hasher.is_applicable(file_path):
                 with open(file_path, 'rb') as file_object:
-                    (new_hashes, new_meta) = hasher.hash(file_object)
-                    hashes = hashes + new_hashes
-                    meta = meta | new_meta
+                    try:
+                        (new_hashes, new_meta) = hasher.hash(file_object)
+                        hashes = hashes + new_hashes
+                        meta = meta | new_meta
+                    except Exception as e:
+                        cprint(f'\tHashing error "{e}" of {type(hasher).__name__} at {file_path}',
+                               "red")
 
         cprint(f'\tHashed {file_path}', "blue")
     except OSError:
         cprint(f'\tUnable to open {file_path}', "red")
+        return None
+
+    if len(hashes) == 0:
         return None
 
     return file_path, (
@@ -242,7 +255,7 @@ def same_time(dup):
     """Check if capture_time meta attribute is the same"""
     items = dup['items']
 
-    if len({(i['meta']['capture_time'] if 'capture_time' in i['meta'] else '') for i in items})>1:
+    if len({(i['meta']['capture_time'] if 'capture_time' in i['meta'] else '') for i in items}) > 1:
         return False
 
     return True
@@ -276,7 +289,21 @@ def find(db, match_time=False):
     if match_time:
         dups = (d for d in dups if same_time(d))
 
-    return list(dups)
+    return make_duplcated_groups_unique(dups)
+
+
+def make_duplcated_groups_unique(dups):
+    """Deduplicate results by removing same groups of duplicates matched by multiple hashes"""
+    cprint('Removing same groups of duplicates having multiple matching hashes...')
+    deduplicated = []
+    unique_groups = set()
+    for dup in dups:
+        group_ids = ' '.join(sorted(x['file_name'] for x in dup['items']))
+        if group_ids not in unique_groups:
+            unique_groups.add(group_ids)
+            deduplicated.append(dup)
+
+    return deduplicated
 
 
 def find_threshold(db, threshold=1):
@@ -297,40 +324,50 @@ def find_threshold(db, threshold=1):
 
     scanned = 0
     for document in db.find():
-        cprint(f'\r{(scanned * 100 / (cnt - 1))}%', end='')
+        cprint(f'\r{round(scanned * 100 / (cnt - 1))}%', end='')
         scanned = scanned + 1
         max_size = document['meta']['file_size']
+        similar = []
+        similar_hashes = []
         for doc_hash in document['hashes']:
             if doc_hash in deduplicated:
                 continue
             deduplicated.add(doc_hash)
             int_hash = int.from_bytes(doc_hash, "big")
+            new_similar = tree.find(int_hash, threshold)
+            if len(new_similar) > 1:
+                similar_hashes.append(str(doc_hash))
+                similar = similar + new_similar
 
-            similar = tree.find(int_hash, threshold)
-            if len(similar) > 1:
-                similar = list(set(similar))
+        if len(similar) > 1:
+            similar = list(set(similar))
 
-                similars = []
-                for (distance, item_hash) in similar:
-                    if distance > 0:
-                        deduplicated.add(item_hash)
+            similars = []
+            similars_name = set()
+            for (distance, item_hash) in similar:
+                if distance > 0:
+                    deduplicated.add(item_hash)
 
-                    for item in db.find({'hashes': binascii.unhexlify(hex(item_hash)[2:])}):
-                        item['file_name'] = item['_id']
-                        similars.append(item)
-                        max_size = max_size if item['meta']['file_size'] <= max_size \
-                            else item['meta']['file_size']
-                if len(similars) > 0:
-                    dups.append(
-                        {
-                            '_id': doc_hash,
-                            'total': len(similars),
-                            'items': similars,
-                            'file_size': max_size
-                        }
-                    )
+                for item in db.find({'hashes': binascii.unhexlify(hex(item_hash)[2:])}):
+                    if item['_id'] in similars_name:
+                        continue
+                    similars_name.add(item['_id'])
+                    item['file_name'] = item['_id']
+                    similars.append(item)
+                    max_size = max_size if item['meta']['file_size'] <= max_size \
+                        else item['meta']['file_size']
 
-    return dups
+            if len(similars) > 1:
+                dups.append(
+                    {
+                        '_id': similar_hashes,
+                        'total': len(similars),
+                        'items': similars,
+                        'file_size': max_size
+                    }
+                )
+
+    return make_duplcated_groups_unique(dups)
 
 
 def delete_duplicates(duplicates, db):
@@ -388,19 +425,29 @@ def display_duplicates(duplicates, db, trash="./Trash/"):
 
     def render(duplicates, current, total):
         env = Environment(loader=FileSystemLoader('template'))
+        env.filters['hash'] = hash
         template = env.get_template('index.html')
         return template.render(duplicates=duplicates,
                                current=current,
                                total=total)
 
     with TemporaryDirectory() as folder:
-        # Generate all of the HTML files
-        chunk_size = 25
-        for i, dups_page in enumerate(chunked(duplicates, chunk_size)):
-            with open(f'{folder}/{i}.html', 'w', encoding="utf-8") as f:
-                f.write(render(dups_page,
-                               current=i,
-                               total=math.ceil(len(duplicates) / chunk_size)))
+        if len(duplicates) == 0:
+            env = Environment(loader=FileSystemLoader('template'))
+            template = env.get_template('no_duplicates.html')
+            with open(f'{folder}/0.html', 'w', encoding="utf-8") as f:
+                f.write(template.render())
+
+        else:
+            # Generate all of the HTML files
+            chunk_size = 25
+            for i, dups_page in enumerate(chunked(duplicates, chunk_size)):
+                with open(f'{folder}/{i}.html', 'w', encoding="utf-8") as f:
+                    f.write(render(dups_page,
+                                   current=i,
+                                   total=math.ceil(len(duplicates) / chunk_size)
+                                   )
+                            )
 
         webbrowser.open(f'file://{folder}/0.html')
 

@@ -10,7 +10,7 @@ class BinaryHasher(abstracthasher.AbstractHasher):
     def __init__(self, digest_size=None):
         self._digest_size = digest_size if digest_size is not None else 16
 
-    def is_applicable(self, file_name: str) -> bool:
+    def is_applicable(self, _: str) -> bool:
         return True
 
     def hash(self, file_object) -> tuple:
