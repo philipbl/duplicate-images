@@ -205,12 +205,13 @@ def test_find_fuzzy():
     duplicate_finder.add(['tests/images/'], db)
 
     dups = duplicate_finder.find_threshold(db, 0)
-    assert len(dups) == 3
-    assert {dups[0]['total'], dups[1]['total'], dups[2]['total']} == {2, 5, 8}
+    assert len(dups) == 6
+    assert {dups[0]['total'], dups[1]['total'], dups[2]['total'],
+            dups[3]['total'], dups[4]['total'],  dups[5]['total']} == {2, 3, 5, 8}
 
     dups = duplicate_finder.find_threshold(db, 10)
-    assert len(dups) == 2
-    assert {dups[0]['total'], dups[1]['total']} == {2, 8}
+    assert len(dups) == 3
+    assert {dups[0]['total'], dups[1]['total'], dups[2]['total']} == {2, 8}
 
 
 def test_dedup():

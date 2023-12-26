@@ -56,6 +56,7 @@ import pybktree
 from termcolor import cprint
 
 from hashers import BinaryHasher, ImageHasher, VideoHasher  # , VideoBarcodeHasher
+from utils import ProgressBarPrinter
 
 
 def get_hashers() -> list:
@@ -104,6 +105,8 @@ def connect_to_db(db_conn_string='./db'):
         db = client.image_database
         images = db.images
 
+    # Create index on hash field
+    images.create_index([("hashes", pymongo.ASCENDING)], unique=False)
     yield images
 
     client.close()
@@ -197,7 +200,7 @@ def new_files(files, db):
 
 
 def add(paths, db, num_processes=None):
-    """Lopp through files and add hash them"""
+    """Loop through files and add hash them"""
     for path in paths:
         cprint(f'Hashing {path}', "blue")
         files = get_files(path)
@@ -222,11 +225,6 @@ def remove_file(file, db):
     db.delete_one({'_id': file})
 
 
-def remove_image(file, db):
-    """Remove file from database"""
-    db.delete_one({'_id': file})
-
-
 def clear(db):
     """Clear database"""
     db.drop()
@@ -246,7 +244,7 @@ def cleanup(db):
     for _id in files:
         file_name = _id['_id']
         if not os.path.exists(file_name):
-            remove_image(file_name, db)
+            remove_file(file_name, db)
             count += 1
     cprint(f'Cleanup removed {count} files', 'yellow')
 
@@ -306,49 +304,58 @@ def make_duplcated_groups_unique(dups):
     return deduplicated
 
 
-def find_threshold(db, threshold=1):
-    """Find duplicates by number of bits of Humming distance"""
-    dups = []
+def _build_binary_tree(cursor, pbp: ProgressBarPrinter) -> pybktree.BKTree:
+    """Build binary tree for fuzzy searches."""
+    cprint('Building fuzzy tree...')
     # Build a tree
     tree = pybktree.BKTree(pybktree.hamming_distance)
-
-    cprint('Finding fuzzy duplicates, it might take a while...')
-    cnt = 0
-    for document in db.find():
+    for document in cursor:
+        pbp.print().inc()
         for doc_hash in document['hashes']:
             int_hash = int.from_bytes(doc_hash, "big")
             tree.add(int_hash)
-        cnt = cnt + 1
 
+    return tree
+
+
+def _get_similar_hashes(doc_hashes, tree: pybktree.BKTree, threshold: int) -> set:
+    """Get similar hashes from tree."""
+    similar = {}
+    for doc_hash in doc_hashes:
+        int_hash = int.from_bytes(doc_hash, "big")
+        new_similar = tree.find(int_hash, threshold)
+        if len(new_similar) > 1:  # length == 1 when it is exact match to itself
+            new_similar = set(new_similar)  # Make unique
+            similar[doc_hash] = list(
+                map(lambda item: binascii.unhexlify(hex(item[1])[2:]), new_similar)
+            )
+
+    return similar
+
+
+def _get_similars_from_tree(db, tree: pybktree.BKTree, cursor,
+                            pbp: ProgressBarPrinter, threshold: int):
+    """Get fuzzy matched semilar duplicates."""
+    cprint('\rSearching duplicates...')
+    dups = []
     deduplicated = set()
 
-    scanned = 0
-    for document in db.find():
-        cprint(f'\r{round(scanned * 100 / (cnt - 1))}%', end='')
-        scanned = scanned + 1
-        max_size = document['meta']['file_size']
-        similar = []
-        similar_hashes = []
-        for doc_hash in document['hashes']:
-            if doc_hash in deduplicated:
-                continue
-            deduplicated.add(doc_hash)
-            int_hash = int.from_bytes(doc_hash, "big")
-            new_similar = tree.find(int_hash, threshold)
-            if len(new_similar) > 1:
-                similar_hashes.append(str(doc_hash))
-                similar = similar + new_similar
+    for document in cursor:
+        pbp.print().inc()
 
-        if len(similar) > 1:
-            similar = list(set(similar))
+        hashes_to_dedup = set(document['hashes']) - deduplicated
+        deduplicated.update(document['hashes'])
 
-            similars = []
-            similars_name = set()
-            for (distance, item_hash) in similar:
-                if distance > 0:
-                    deduplicated.add(item_hash)
+        similar_hashes = _get_similar_hashes(hashes_to_dedup, tree, threshold)
 
-                for item in db.find({'hashes': binascii.unhexlify(hex(item_hash)[2:])}):
+        if len(similar_hashes) > 0:
+            max_size = document['meta']['file_size']
+            for doc_hashes in similar_hashes.values():
+                deduplicated.update(doc_hashes)
+
+                similars = []
+                similars_name = set()
+                for item in db.find({'hashes': {'$in': doc_hashes}}):
                     if item['_id'] in similars_name:
                         continue
                     similars_name.add(item['_id'])
@@ -357,34 +364,46 @@ def find_threshold(db, threshold=1):
                     max_size = max_size if item['meta']['file_size'] <= max_size \
                         else item['meta']['file_size']
 
-            if len(similars) > 1:
-                dups.append(
-                    {
-                        '_id': similar_hashes,
-                        'total': len(similars),
-                        'items': similars,
-                        'file_size': max_size
-                    }
-                )
+                dups.append({
+                    '_id': list(similar_hashes.keys()),
+                    'total': len(similars),
+                    'items': similars,
+                    'file_size': max_size
+                })
 
     return make_duplcated_groups_unique(dups)
 
 
+def find_threshold(db, threshold=1):
+    """Find duplicates by number of bits of Humming distance"""
+    cprint('Finding fuzzy duplicates, it might take a while...')
+
+    cnt = db.count_documents({})
+    all_documents = db.find()
+
+    pbp = ProgressBarPrinter(cnt)
+
+    tree = _build_binary_tree(all_documents, pbp)
+    pbp.reset()
+    all_documents.rewind()
+    return _get_similars_from_tree(db, tree, all_documents, pbp, threshold)
+
+
 def delete_duplicates(duplicates, db):
     """Delete duplicates except the first one"""
-    results = [delete_picture(x['file_name'], db)
+    results = [delete_duplicate_file(x['file_name'], db)
                for dup in duplicates for x in dup['items'][1:]]
     cprint(f'Deleted {results.count(True)}/{len(results)} files', 'yellow')
 
 
-def delete_picture(file_name, db, trash="./Trash/"):
-    """Delete picture file and from the database"""
+def delete_duplicate_file(file_name, db, trash="./Trash/"):
+    """Delete duplicated file and from the database"""
     cprint(f'Moving {file_name} to {trash}', 'yellow')
     if not os.path.exists(trash):
         os.makedirs(trash)
     try:
         shutil.move(file_name, trash + os.path.basename(file_name))
-        remove_image(file_name, db)
+        remove_file(file_name, db)
     except FileNotFoundError:
         cprint(f'File not found {file_name}', 'red')
         return False
@@ -453,7 +472,7 @@ def display_duplicates(duplicates, db, trash="./Trash/"):
 
         @app.route('/picture/<path:file_name>', methods=['DELETE'])
         def delete_picture_(file_name, trash=trash):
-            return str(delete_picture('/' + file_name, db, trash))
+            return str(delete_duplicate_file('/' + file_name, db, trash))
 
         @app.route('/heic-transform/<path:file_name>', methods=['GET'])
         def transcode_heic_(file_name):
