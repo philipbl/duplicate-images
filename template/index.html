@@ -1,26 +1,75 @@
 <html>
 <head>
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap-theme.min.css">
-    <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap-theme.min.css">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
 </head>
 
-{% macro image(img, size) -%}
-<div class="col-xs-{{ size }}">
-    <div class="thumbnail">
-        <img class="img-responsive" src="{{ img['file_name'] }}" alt="{{ img['file_name'] }}">
-        <div class="caption">
-            <h5 class="name">{{ img['file_name'] }}</h5>
-            <div class="file-size">{{ img['file_size'] | filesizeformat }}</div>
-            <div class="resolution">{{ img['image_size'] }}</div>
-            <div class="capture-time">{{ img['capture_time'] }}</div>
-            <button class="btn btn-danger delete-btn" role="button" data-name="{{ img['file_name'] }}" style="margin-top: 15px">
+{% macro duplicate_group(dup) -%}
+<table class="table">
+    <tr>
+        <th scope="row">Hash</th>
+        <th colspan="{{ dup['items']['id']|length }}">{{ dup['_id'] }}</th>
+    </tr>
+    <tr>
+        <th scope="row"> Max size</th>
+        <td colspan="{{ dup['items']['id']|length }}">{{ dup['file_size'] }}</td>
+    <tr>
+    {% for key, values in dup['items'].items() %}
+    <tr>
+        {% if key not in ('id', 'file_name') %}
+            <th scope="row">{{ key | replace('_', ' ') | title  }}</th>
+            {% for value in values %}
+            <td data-item-id="{{ dup['items']['id'][loop.index - 1] }}">{{ value }}</td>
+            {% endfor %}
+        {% endif %}
+    </tr>
+    {% endfor %}
+    <tr>
+        <th scope="row"> Filename</th>
+        {% for file_name in dup['items']['file_name'] %}
+        <td data-item-id="{{ dup['items']['id'][loop.index - 1] }}">
+            {{ file_name }}
+        </td>
+        {% endfor %}
+    </tr>
+    <tr>
+        <th scope="row">Preview</th>
+        {% for file_name in dup['items']['file_name'] %}
+        <td data-item-id="{{ dup['items']['id'][loop.index - 1] }}">
+            {% if '.heic' in file_name | lower %}
+            <a href="http://127.0.0.1:5000/heic-transform/{{ file_name| urlencode }}" target='_blank'>
+                <img class="img-responsive" src="http://127.0.0.1:5000/heic-transform/{{ file_name| urlencode }}" alt="{{ file_name }}">
+            </a>
+            {% else %}
+                {% if '.mp4' in file_name | lower or '.avi' in file_name | lower or '.mov' in file_name | lower 
+                    or '.ogv' in file_name | lower or '.mkv' in file_name | lower or '.mov' in file_name | lower 
+                    or '.webm' in file_name | lower or '.ts' in file_name | lower %}
+                    <video width="320" height="240" controls>
+                    <source src="{{ file_name }}">
+                </video>
+                {% else %}
+                <a href="{{ file_name }}" target='_blank'>
+                    <img class="img-responsive" src="{{ file_name }}" alt="{{ file_name }}">
+                </a>
+                {% endif %}            
+            {% endif %}
+        </td>
+        {% endfor %}
+    </tr>
+    <tr>
+        <th scope="row"></th>
+        {% for id in dup['items']['id'] %}
+        <td data-item-id="{{ dup['items']['id'][loop.index - 1] }}">
+            <button class="btn btn-danger delete-btn" role="button" data-name="{{ id }}" style="margin-top: 15px">
                 Delete
             </button>
-        </div>
-    </div>
-</div>
+        </td>
+        {% endfor %}
+    </tr>
+</table>
 {%- endmacro %}
 
 {% macro pagination(current, total) -%}
@@ -45,40 +94,10 @@
 {%- endmacro %}
 
 <body>
-    <div class="container">
+    <div class="container" style="width: 100%;">
         {% for dup in duplicates %}
         <div class="row" style="margin: 15px; margin-bottom: 30px;">
-            {% set names = dup['items'] %}
-            {% if names | count == 2 %}
-                {{ image(names[0], 6) }}
-                {{ image(names[1], 6) }}
-            {% elif names | count == 3 %}
-                {{ image(names[0], 4) }}
-                {{ image(names[1], 4) }}
-                {{ image(names[2], 4) }}
-            {% elif names | count == 4 %}
-                {{ image(names[0], 3) }}
-                {{ image(names[1], 3) }}
-                {{ image(names[2], 3) }}
-                {{ image(names[3], 3) }}
-            {% elif names | count == 5 %}
-                {{ image(names[0], 2) }}
-                {{ image(names[1], 2) }}
-                {{ image(names[2], 2) }}
-                {{ image(names[3], 2) }}
-                {{ image(names[4], 2) }}
-            {% elif names | count == 6 %}
-                {{ image(names[0], 2) }}
-                {{ image(names[1], 2) }}
-                {{ image(names[2], 2) }}
-                {{ image(names[3], 2) }}
-                {{ image(names[4], 2) }}
-                {{ image(names[5], 2) }}
-            {% elif names | count > 6 %}
-                {% for n in names %}
-                    {{ image(n, 1) }}
-                {% endfor %}
-            {% endif %}
+            {{ duplicate_group(dup) }}
         </div>
         {% endfor %}
 
@@ -99,15 +118,17 @@
 
         $(".delete-btn").click(function() {
             var file_name = $(this).data("name");
-            var parent = $(this).parent().parent();
+            var parent =  $(this).parent();
+            var item_id = $(this).parent().data("item-id");
+            var all_tds = $("td").filter("[data-item-id='" + item_id + "']")
 
             $.ajax({
-                url: 'http://127.0.0.1:5000/picture/' + encodeURIComponent(file_name),
+                url: 'http://127.0.0.1:5000/picture' + file_name, //encodeURIComponent(file_name),
                 // url: '/picture/%2FVolumes',
                 type: 'DELETE',
                 success: function(data) {
                     if(data == "True") {
-                        parent.addClass('fade');
+                        all_tds.addClass('fade');
                     }
                     else {
                         $('#file-not-found-alert').addClass('in');
